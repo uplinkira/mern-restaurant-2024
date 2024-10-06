@@ -1,0 +1,56 @@
+E:\OneDrive - xrhub\Yaqi_code\mern-restaurant-2024
+backend/controllers
+│   └── authController.js
+backend/data
+│   ├── dishes.json
+│   ├── menu-categories.json
+│   ├── products.json
+│   ├── reservations.json
+│   └── restaurants.json
+backend/models
+│   ├── Dish.js
+│   ├── MenuCategory.js
+│   ├── Product.js
+│   ├── Reservation.js
+│   ├── Restaurant.js
+│   └── User.js
+backend/routes
+│   ├── auth.js
+│   ├── dishes.js
+│   └── restaurants.js
+backend/middleware
+│   └── authMiddleware.js
+client/src
+│   ├── App.css
+│   ├── App.js
+│   ├── App.test.js
+│   ├── components
+│   │   ├── Footer.js
+│   │   ├── Header.js
+│   │   ├── Login.js
+│   │   ├── Menu.js
+│   │   ├── Register.js
+│   │   ├── RestaurantDetails.js
+│   │   ├── RestaurantList.js
+│   │   ├── SearchBar.js
+│   │   └── SearchResults.js
+│   ├── index.css
+│   ├── index.js
+│   ├── logo.svg
+│   ├── pages
+│   │   ├── HomePage.js
+│   │   ├── LoginPage.js
+│   │   ├── RegisterPage.js
+│   │   └── RestaurantPage.js
+│   ├── redux
+│   │   ├── actions
+│   │   │   └── searchActions.js
+│   │   ├── reducers
+│   │   │   └── searchReducer.js
+│   │   ├── slices
+│   │   │   ├── authSlice.js
+│   │   │   ├── dishSlice.js
+│   │   │   └── restaurantSlice.js
+│   │   └── store.js
+│   ├── reportWebVitals.js
+│   └── setupTests.js

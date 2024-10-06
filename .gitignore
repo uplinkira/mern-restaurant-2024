@@ -1,0 +1,107 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artifacts
+dist/
+build/
+
+# Sensitive environment variables
+.env
+.env.local
+.env.*.local
+!.env.example  # Keep example env file in the repo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+/logs
+*.log
+*.log.*
+
+# Database dumps
+*.sql
+*.sqlite
+*.sqlite3
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Editor-specific files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Optional Typescript build files
+*.tsbuildinfo
+.cache/
+
+# Dependency directories
+node_modules/
+
+# Miscellaneous
+*.lock
+*.bak
+*.swp
+*.tmp
+*.pid
+*.seed
+*.pid.lock
+
+# Ignore coverage results
+coverage/
+
+# Ignore backend testing files
+/backend/coverage/
+backend/junit.xml
+backend/coverage-final.json
+
+# Ignore frontend testing files
+/frontend/coverage/
+frontend/junit.xml
+frontend/coverage-final.json
+
+# Ignore AWS, Docker, and other cloud/platform files
+.aws/
+.docker/
+docker-compose.yml
+Dockerfile
+
+# GitHub Actions
+/.github/workflows/
+
+# CI/CD files
+.gitlab-ci.yml
+.circleci/
+
+# Ignore the compiled production code
+/public/js/*.map
+
+# Misc
+.sass-cache/
+.idea/
+.project/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+.terraform/
+.vagrant/
+
+# Firebase or other service-related files
+firebase-debug.log
+
+# Heroku
+/.heroku/
+
+# Backend sensitive data
+/backend/data/
