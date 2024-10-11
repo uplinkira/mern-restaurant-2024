@@ -10,15 +10,23 @@ const SearchBar = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    dispatch(searchRestaurantsAndDishes(query));
-    navigate('/search');
+    
+    const trimmedQuery = query.trim(); // Ensure query is not empty or just spaces
+    if (!trimmedQuery) {
+      return; // Prevent submitting an empty search query
+    }
+
+    // Pass query via the URL to the /search page
+    navigate(`/search?q=${trimmedQuery}`);
+    // Dispatch search action with the query
+    dispatch(searchRestaurantsAndDishes(trimmedQuery));
   };
 
   return (
     <form onSubmit={handleSubmit} className="search-bar">
       <input
         type="text"
-        placeholder="Search restaurants or dishes"
+        placeholder="Search restaurants, dishes, or products"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />

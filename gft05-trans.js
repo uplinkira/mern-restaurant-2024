@@ -1,20 +1,16 @@
 const fs = require('fs');
 const path = require('path');
 
-const outputFilePath = path.join(__dirname, 'file-structure-inner.txt'); // 输出文件放在同一目录
+const outputFilePath = path.join(__dirname, 'file-structure-srf.txt'); // 输出文件放在同一目录
 const rootDir = process.cwd(); // 自动获取当前工作目录
 
 // 设置要输出的最大层级
-const maxDepth = 3;  // 修改此处来控制输出的层级，例如 2 表示输出两层文件夹
+const maxDepth = 1;  // 修改此处来控制输出的层级，例如 2 表示输出两层文件夹
 
 // 指定要输出的文件夹，支持跨层级
 const includeFolders = [
-    'backend/controllers',
-    'backend/data',
-    'backend/models',
-    'backend/routes',
-    'backend/middleware',
-    'client/src' // 也可以指定任意深层文件夹
+    'backend',
+    'client' // 也可以指定任意深层文件夹
     // 可以根据需要添加更多文件夹
 ];
 
@@ -61,4 +57,4 @@ fs.writeFileSync(outputFilePath, fileTree);
 
 console.log(`文件结构已生成并保存到 ${outputFilePath}`);
 
-//node gft04-trans.js
+//node gft05-trans.js

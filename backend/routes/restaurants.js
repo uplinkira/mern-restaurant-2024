@@ -1,16 +1,20 @@
-
 const express = require('express');
 const router = express.Router();
 const {
   getAllRestaurants,
   getRestaurantById,
   getRestaurantDishes,
-  searchRestaurantsAndDishes
+  searchRestaurantsDishesAndProducts // Correct import
 } = require('../controllers/restaurantController');
 
 // Route to search restaurants and dishes
-// Note: Placed before the dynamic :id route to avoid conflicts.
-router.get('/search', searchRestaurantsAndDishes);
+// Place non-ID based routes first to avoid conflicts with :id
+router.get('/search', searchRestaurantsDishesAndProducts); // Correct route
+
+// Test route to ensure routes are working
+router.get('/test', (req, res) => {
+  res.send('Restaurant routes are working!');
+});
 
 // Route to get all restaurants
 router.get('/', getAllRestaurants);
@@ -22,4 +26,3 @@ router.get('/:id', getRestaurantById);
 router.get('/:id/dishes', getRestaurantDishes);
 
 module.exports = router;
-

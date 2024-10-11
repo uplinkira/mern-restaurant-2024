@@ -1,25 +1,38 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { logout } from '../redux/slices/authSlice'; // Import the logout action
 
 const Header = () => {
-  const auth = useSelector(state => state.auth);
-  const user = auth ? auth.user : null;
+  const { user, isAuthenticated } = useSelector(state => state.auth); // Directly destructure user and isAuthenticated
+  const dispatch = useDispatch();
+
+  const handleLogout = () => {
+    if (window.confirm('Are you sure you want to logout?')) { // Optional: Add logout confirmation
+      dispatch(logout()); // Dispatch the logout action
+    }
+  };
 
   return (
-    <header className="bg-blue-500 p-4">
+    <header className="header">
       <nav className="container mx-auto flex justify-between items-center">
-        <Link to="/" className="text-white text-2xl font-bold">MERN-Restaurant</Link>
-        <div>
-          {user ? (
+        <Link to="/" className="logo">MERN-Restaurant</Link>
+        <div className="navigation">
+          {isAuthenticated && user ? ( // Use isAuthenticated to conditionally render
             <>
-              <span className="text-white mr-4">Welcome, {user.email}</span>
-              <button className="text-white">Logout</button>
+              <span className="welcome-text">Welcome, {user.email}</span>
+              <button 
+                onClick={handleLogout} 
+                className="logout-button" 
+                aria-label="Logout" // Added aria-label for accessibility
+              >
+                Logout
+              </button>
             </>
           ) : (
             <>
-              <Link to="/login" className="text-white mr-4">Login</Link>
-              <Link to="/register" className="text-white">Register</Link>
+              <Link to="/login" className="nav-link" aria-label="Login">Login</Link>
+              <Link to="/register" className="nav-link" aria-label="Register">Register</Link>
             </>
           )}
         </div>

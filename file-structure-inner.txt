@@ -1,6 +1,9 @@
 E:\OneDrive - xrhub\Yaqi_code\mern-restaurant-2024
 backend/controllers
-│   └── authController.js
+│   ├── authController.js
+│   ├── orderController.js
+│   ├── productController.js
+│   └── restaurantController.js
 backend/data
 │   ├── dishes.json
 │   ├── menu-categories.json
@@ -8,15 +11,21 @@ backend/data
 │   ├── reservations.json
 │   └── restaurants.json
 backend/models
+│   ├── Cart.js
 │   ├── Dish.js
 │   ├── MenuCategory.js
+│   ├── Order.js
 │   ├── Product.js
 │   ├── Reservation.js
 │   ├── Restaurant.js
 │   └── User.js
 backend/routes
 │   ├── auth.js
+│   ├── cart.js
 │   ├── dishes.js
+│   ├── order.js
+│   ├── products.js
+│   ├── profile.js
 │   └── restaurants.js
 backend/middleware
 │   └── authMiddleware.js
@@ -25,15 +34,24 @@ client/src
 │   ├── App.js
 │   ├── App.test.js
 │   ├── components
+│   │   ├── AddToCartButton.js
+│   │   ├── Cart.js
+│   │   ├── Checkout.js
+│   │   ├── DishDetails.js
 │   │   ├── Footer.js
 │   │   ├── Header.js
 │   │   ├── Login.js
 │   │   ├── Menu.js
+│   │   ├── OrderHistory.js
+│   │   ├── PaymentForm.js
+│   │   ├── ProductDetails.js
+│   │   ├── ProductList.js
 │   │   ├── Register.js
 │   │   ├── RestaurantDetails.js
 │   │   ├── RestaurantList.js
 │   │   ├── SearchBar.js
-│   │   └── SearchResults.js
+│   │   ├── SearchResults.js
+│   │   └── UserProfile.js
 │   ├── index.css
 │   ├── index.js
 │   ├── logo.svg
@@ -49,8 +67,11 @@ client/src
 │   │   │   └── searchReducer.js
 │   │   ├── slices
 │   │   │   ├── authSlice.js
+│   │   │   ├── cartSlice.js
 │   │   │   ├── dishSlice.js
-│   │   │   └── restaurantSlice.js
+│   │   │   ├── orderSlice.js
+│   │   │   ├── restaurantSlice.js
+│   │   │   └── userSlice.js
 │   │   └── store.js
 │   ├── reportWebVitals.js
 │   └── setupTests.js
