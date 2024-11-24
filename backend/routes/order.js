@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { createOrder, getOrderHistory, updateOrderStatus } = require('../controllers/orderController');
-const authMiddleware = require('../middleware/authMiddleware'); // Auth middleware for user validation
+const { authMiddleware } = require('../middleware/authMiddleware'); // Auth middleware for user validation
 
 // Create a new order
 router.post('/', authMiddleware, createOrder);

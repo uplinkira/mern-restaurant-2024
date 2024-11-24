@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://localhost:5001/api';
 
 // Fetch dishes for a specific restaurant
 export const fetchDishes = createAsyncThunk(
@@ -32,18 +32,29 @@ export const fetchDishDetails = createAsyncThunk(
 const dishSlice = createSlice({
   name: 'dishes',
   initialState: {
-    list: [],         // For multiple dishes (e.g., a restaurant's menu)
-    currentDish: null, // For storing the details of a specific dish
+    list: [],          // Store multiple dishes (e.g., restaurant menu)
+    currentDish: null, // Store specific dish details
     status: 'idle',
     error: null,
   },
-  reducers: {},
+  reducers: {
+    // Optional: Clear current dish when navigating away
+    clearCurrentDish: (state) => {
+      state.currentDish = null;
+    },
+    // Optional: Clear all dishes (for example, when logging out)
+    clearAllDishes: (state) => {
+      state.list = [];
+      state.status = 'idle';
+      state.error = null;
+    },
+  },
   extraReducers: (builder) => {
     builder
-      // Handle fetching multiple dishes (e.g., for a restaurant)
+      // Handle fetching multiple dishes for a restaurant
       .addCase(fetchDishes.pending, (state) => {
         state.status = 'loading';
-        state.error = null; // Clear previous errors
+        state.error = null;
       })
       .addCase(fetchDishes.fulfilled, (state, action) => {
         state.status = 'succeeded';
@@ -51,13 +62,12 @@ const dishSlice = createSlice({
       })
       .addCase(fetchDishes.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Something went wrong while fetching dishes';
+        state.error = action.payload || 'Failed to fetch dishes';
       })
-      
       // Handle fetching a single dish by its ID
       .addCase(fetchDishDetails.pending, (state) => {
         state.status = 'loading';
-        state.error = null; // Clear previous errors
+        state.error = null;
       })
       .addCase(fetchDishDetails.fulfilled, (state, action) => {
         state.status = 'succeeded';
@@ -65,9 +75,13 @@ const dishSlice = createSlice({
       })
       .addCase(fetchDishDetails.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Something went wrong while fetching the dish details';
+        state.error = action.payload || 'Failed to fetch dish details';
       });
   },
 });
 
+// Export the reducer actions
+export const { clearCurrentDish, clearAllDishes } = dishSlice.actions;
+
+// Export the reducer as default
 export default dishSlice.reducer;

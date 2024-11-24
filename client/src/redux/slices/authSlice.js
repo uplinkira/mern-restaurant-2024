@@ -1,93 +1,99 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-// Create an Axios instance
+// Create an Axios instance with the backend base URL
 const axiosInstance = axios.create({
-  baseURL: 'http://localhost:5000',  // Ensure the base URL is correct for backend
+  baseURL: 'http://localhost:5001',  // Ensure the base URL is correct
 });
 
 // Add Axios interceptor to include Authorization header if token exists
-axiosInstance.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers['Authorization'] = `Bearer ${token}`;  // Add Authorization header
-  }
-  return config;
-}, (error) => {
-  return Promise.reject(error);
-});
+axiosInstance.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;  // Add Authorization header
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
-// User registration
+// User registration action
 export const registerUser = createAsyncThunk(
   'auth/registerUser',
-  async ({ name, email, password }, { rejectWithValue }) => {
+  async ({ username, firstName, lastName, phoneNumber, email, password }, { rejectWithValue }) => {
     try {
-      // Making POST request to register the user
-      const response = await axiosInstance.post('/api/auth/register', { name, email, password });
-      
+      const response = await axiosInstance.post('/api/auth/register', {
+        username,
+        firstName,
+        lastName,
+        phoneNumber,
+        email,
+        password,
+      });
+      const { token, user } = response.data;
+
       // Store token in localStorage
-      localStorage.setItem('token', response.data.token);
-      return response.data;  // Ensure to return token and user data
+      localStorage.setItem('token', token);
+      return { user, token };  // Return user and token to be handled by reducers
     } catch (error) {
-      console.error('Registration Error:', error);  // Log error for debugging
-      return rejectWithValue(error.response?.data || 'Registration failed');
+      console.error('Registration Error:', error);
+      return rejectWithValue(error.response?.data?.message || 'Registration failed.');
     }
   }
 );
 
-// User login
+// User login action
 export const loginUser = createAsyncThunk(
   'auth/loginUser',
   async ({ email, password }, { rejectWithValue }) => {
     try {
-      // Making POST request to login the user
       const response = await axiosInstance.post('/api/auth/login', { email, password });
-      
+      const { token, user } = response.data;
+
       // Store token in localStorage
-      localStorage.setItem('token', response.data.token);
-      return response.data;  // Ensure to return token and user data
+      localStorage.setItem('token', token);
+      return { user, token };
     } catch (error) {
-      console.error('Login Error:', error);  // Log error for debugging
-      return rejectWithValue(error.response?.data || 'Login failed');
+      console.error('Login Error:', error);
+      return rejectWithValue(error.response?.data?.message || 'Login failed.');
     }
   }
 );
 
-// Google OAuth login
+// Google OAuth login action
 export const googleLogin = createAsyncThunk(
   'auth/googleLogin',
   async (tokenId, { rejectWithValue }) => {
     try {
-      // Making POST request to login with Google OAuth
       const response = await axiosInstance.post('/api/auth/google', {}, {
-        headers: {
-          'Authorization': `Bearer ${tokenId}`  // Send Google token via Authorization header
-        }
+        headers: { 'Authorization': `Bearer ${tokenId}` }
       });
-      
+      const { token, user } = response.data;
+
       // Store token in localStorage
-      localStorage.setItem('token', response.data.token);
-      return response.data;  // Ensure to return token and user data
+      localStorage.setItem('token', token);
+      return { user, token };
     } catch (error) {
-      console.error('Google Login Error:', error);  // Log error for debugging
-      return rejectWithValue(error.response?.data || 'Google login failed');
+      console.error('Google Login Error:', error);
+      return rejectWithValue(error.response?.data?.message || 'Google login failed.');
     }
   }
 );
 
-// Auth slice for handling authentication state
+// Authentication slice
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
     user: null,
-    token: localStorage.getItem('token') || null,  // Load token from localStorage on init
-    isAuthenticated: !!localStorage.getItem('token'),  // Check if token exists
+    token: localStorage.getItem('token') || null,
+    isAuthenticated: !!localStorage.getItem('token'),
     status: 'idle',
     error: null,
   },
   reducers: {
     logout: (state) => {
-      localStorage.removeItem('token');  // Clear token from localStorage on logout
+      localStorage.removeItem('token');
       state.user = null;
       state.token = null;
       state.isAuthenticated = false;
@@ -103,13 +109,13 @@ const authSlice = createSlice({
       })
       .addCase(registerUser.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.user = action.payload.user;  // Ensure backend sends user info along with token
-        state.token = action.payload.token;  // Store token in Redux state
+        state.user = action.payload.user;
+        state.token = action.payload.token;
         state.isAuthenticated = true;
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload;  // Error message in case of failure
+        state.error = action.payload;
       })
       // Handle login
       .addCase(loginUser.pending, (state) => {
@@ -117,13 +123,13 @@ const authSlice = createSlice({
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.user = action.payload.user;  // Ensure backend sends user info along with token
-        state.token = action.payload.token;  // Store token in Redux state
+        state.user = action.payload.user;
+        state.token = action.payload.token;
         state.isAuthenticated = true;
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload;  // Error message in case of failure
+        state.error = action.payload;
       })
       // Handle Google login
       .addCase(googleLogin.pending, (state) => {
@@ -137,7 +143,7 @@ const authSlice = createSlice({
       })
       .addCase(googleLogin.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload;  // Error message in case of failure
+        state.error = action.payload;
       });
   },
 });

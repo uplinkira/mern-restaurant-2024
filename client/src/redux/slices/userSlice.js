@@ -1,57 +1,61 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-// Create Axios instance with interceptor for token
-const axiosInstance = axios.create();
-
-// Add Axios interceptor to automatically include the token in headers
-axiosInstance.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-}, (error) => {
-  return Promise.reject(error);
+// Create Axios instance with token interceptor
+const axiosInstance = axios.create({
+  baseURL: 'http://localhost:5001', // Backend API base URL
 });
 
-// Fetch User Profile
+// Automatically include Authorization header with token
+axiosInstance.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Fetch the logged-in user's profile
 export const fetchUserProfile = createAsyncThunk(
   'user/fetchUserProfile',
   async (_, { rejectWithValue }) => {
     try {
       const response = await axiosInstance.get('/api/profile/me');
-      return response.data;
+      return response.data; // Return user profile data
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch user profile');
     }
   }
 );
 
-// Update User Profile
+// Update the user's profile
 export const updateUserProfile = createAsyncThunk(
   'user/updateUserProfile',
   async (userData, { rejectWithValue }) => {
     try {
       const response = await axiosInstance.put('/api/profile/me', userData);
-      return response.data;
+      return response.data; // Return updated profile data
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to update user profile');
     }
   }
 );
 
+// User slice for managing profile state
 const userSlice = createSlice({
   name: 'user',
   initialState: {
-    userProfile: null,
-    status: 'idle',
-    error: null,
+    userProfile: null, // User profile data
+    status: 'idle', // Loading status
+    error: null, // Error message
   },
   reducers: {},
   extraReducers: (builder) => {
     builder
-      // Handle Fetch Profile
+      // Fetch user profile actions
       .addCase(fetchUserProfile.pending, (state) => {
         state.status = 'loading';
       })
@@ -61,9 +65,9 @@ const userSlice = createSlice({
       })
       .addCase(fetchUserProfile.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload; // Capture error message from rejectWithValue
+        state.error = action.payload;
       })
-      // Handle Update Profile
+      // Update user profile actions
       .addCase(updateUserProfile.pending, (state) => {
         state.status = 'loading';
       })
@@ -73,7 +77,7 @@ const userSlice = createSlice({
       })
       .addCase(updateUserProfile.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload; // Capture error message from rejectWithValue
+        state.error = action.payload;
       });
   },
 });

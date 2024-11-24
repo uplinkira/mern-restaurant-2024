@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import RestaurantList from '../components/RestaurantList';
+import '../App.css'; 
 
 const HomePage = () => {
   useEffect(() => {

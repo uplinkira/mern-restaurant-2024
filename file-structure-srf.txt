@@ -1,5 +1,6 @@
-E:\OneDrive - xrhub\Yaqi_code\mern-restaurant-2024
+/Users/orangesnail/Desktop/temp/mern-restaurant-2024
 backend
+│   ├── .DS_Store
 │   ├── .env
 │   ├── config
 │   ├── controllers
@@ -10,18 +11,19 @@ backend
 │   ├── package-lock.json
 │   ├── package.json
 │   ├── routes
-│   ├── seedData.js
 │   ├── seedDatabase.js
 │   ├── server.js
-│   └── testMongoConnection.js
+│   └── utils
 client
+│   ├── .DS_Store
+│   ├── .env
 │   ├── .gitignore
+│   ├── README.md
 │   ├── build
 │   ├── node_modules
 │   ├── package-lock.json
 │   ├── package.json
 │   ├── postcss.config.js
 │   ├── public
-│   ├── README.md
 │   ├── src
 │   └── tailwind.config.js

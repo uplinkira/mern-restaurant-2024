@@ -1,20 +1,24 @@
-E:\OneDrive - xrhub\Yaqi_code\mern-restaurant-2024
+/Users/orangesnail/Desktop/temp/mern-restaurant-2024
 backend/controllers
 │   ├── authController.js
+│   ├── dishController.js
 │   ├── orderController.js
 │   ├── productController.js
+│   ├── profileController.js
 │   └── restaurantController.js
 backend/data
+│   ├── abbrs.json
 │   ├── dishes.json
-│   ├── menu-categories.json
+│   ├── menus.json
 │   ├── products.json
 │   ├── reservations.json
-│   └── restaurants.json
+│   ├── restaurants.json
+│   ├── users.json
+│   └── users01.json
 backend/models
 │   ├── Cart.js
 │   ├── Dish.js
-│   ├── MenuCategory.js
-│   ├── Order.js
+│   ├── Menu.js
 │   ├── Product.js
 │   ├── Reservation.js
 │   ├── Restaurant.js
@@ -23,9 +27,11 @@ backend/routes
 │   ├── auth.js
 │   ├── cart.js
 │   ├── dishes.js
+│   ├── menus.js
 │   ├── order.js
 │   ├── products.js
 │   ├── profile.js
+│   ├── reservations.js
 │   └── restaurants.js
 backend/middleware
 │   └── authMiddleware.js
@@ -40,18 +46,18 @@ client/src
 │   │   ├── DishDetails.js
 │   │   ├── Footer.js
 │   │   ├── Header.js
-│   │   ├── Login.js
 │   │   ├── Menu.js
 │   │   ├── OrderHistory.js
 │   │   ├── PaymentForm.js
 │   │   ├── ProductDetails.js
 │   │   ├── ProductList.js
-│   │   ├── Register.js
 │   │   ├── RestaurantDetails.js
 │   │   ├── RestaurantList.js
 │   │   ├── SearchBar.js
 │   │   ├── SearchResults.js
 │   │   └── UserProfile.js
+│   ├── hooks
+│   │   └── useGoogleLogin.js
 │   ├── index.css
 │   ├── index.js
 │   ├── logo.svg
@@ -59,7 +65,8 @@ client/src
 │   │   ├── HomePage.js
 │   │   ├── LoginPage.js
 │   │   ├── RegisterPage.js
-│   │   └── RestaurantPage.js
+│   │   ├── RestaurantPage.js
+│   │   └── UserProfile.js
 │   ├── redux
 │   │   ├── actions
 │   │   │   └── searchActions.js
@@ -74,4 +81,6 @@ client/src
 │   │   │   └── userSlice.js
 │   │   └── store.js
 │   ├── reportWebVitals.js
-│   └── setupTests.js
+│   ├── setupTests.js
+│   └── utils
+│   │   └── validation.js

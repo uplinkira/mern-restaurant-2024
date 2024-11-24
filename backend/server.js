@@ -1,12 +1,22 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 
+const restaurantRoutes = require('./routes/restaurants');
+const menuRoutes = require('./routes/menus');
+const dishRoutes = require('./routes/dishes');
+const productRoutes = require('./routes/products');
+// const reservationRoutes = require('./routes/reservations'); // Commented out to skip reservations route
+const authRoutes = require('./routes/auth');
+const profileRoutes = require('./routes/profile');
+
+// Initialize Express app
 const app = express();
 
-// Enhanced CORS Configuration
-const allowedOrigins = ['http://localhost:3000', 'https://your-production-domain.com'];
+// Middleware for CORS
+const allowedOrigins = ['http://localhost:3001', 'http://localhost:5001', 'https://your-production-domain.com'];
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -15,78 +25,74 @@ const corsOptions = {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],  // Ensure OPTIONS method is allowed for preflight requests
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allow all necessary methods
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,  // Allow cookies to be sent with requests
-  optionsSuccessStatus: 200  // Some older browsers choke on 204 responses
+  credentials: true, // Allow cookies to be sent
+  optionsSuccessStatus: 200, // Fallback status for legacy browsers
 };
-
 app.use(cors(corsOptions));
-app.use(express.json());  // Parse incoming JSON requests
 
-// MongoDB Connection with retry logic and improved logging
-const connectWithRetry = () => {
-  mongoose.connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 5000,  // 5 seconds timeout for connection
-  })
-  .then(() => console.log('MongoDB connected successfully...'))
-  .catch(err => {
-    console.error('MongoDB connection error:', err);
-    console.log('Retrying MongoDB connection in 5 seconds...');
-    setTimeout(connectWithRetry, 5000);  // Retry connection after 5 seconds
-  });
+// Middleware for parsing JSON requests
+app.use(express.json());
+
+// MongoDB connection logic with retry and logging
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    console.log('MongoDB connected...');
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
+    process.exit(1);
+  }
 };
-
-connectWithRetry();
+connectDB(); // Call to initiate MongoDB connection
 
 // Routes
-const restaurantRoutes = require('./routes/restaurants');
-const authRoutes = require('./routes/auth');
-const profileRoutes = require('./routes/profile');
-const dishRoutes = require('./routes/dishes');
-const cartRoutes = require('./routes/cart');
-const orderRoutes = require('./routes/order');
-const productRoutes = require('./routes/products');
-
-// Register Routes
 app.use('/api/restaurants', restaurantRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/profile', profileRoutes);
+app.use('/api/menus', menuRoutes);
 app.use('/api/dishes', dishRoutes);
-app.use('/api/cart', cartRoutes);
-app.use('/api/order', orderRoutes);
 app.use('/api/products', productRoutes);
+// app.use('/api/reservations', reservationRoutes); // Skipped reservation routes
+app.use('/api/auth', authRoutes); // Authentication routes for registration and login
+app.use('/api/profile', profileRoutes); // Profile routes for user management
 
-// Error Handling Middleware - improved for specific errors
+// Serve static files (optional for frontend)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Global error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error:', err.stack);
+  console.error('Error:', err.message);
   if (res.headersSent) {
     return next(err);
   }
-  if (err.name === 'ValidationError') {
-    return res.status(400).json({ message: err.message });
-  } else if (err.message && err.message.includes('CORS')) {
-    return res.status(403).json({ message: 'CORS error: ' + err.message });
+  if (err.message.includes('CORS')) {
+    return res.status(403).json({ error: 'CORS Error: ' + err.message });
   }
-  res.status(500).json({ message: 'An internal server error occurred', error: err.message });
+  res.status(500).json({ error: 'Internal Server Error', message: err.message });
 });
 
-// Graceful shutdown handling
-const server = app.listen(process.env.PORT || 5000, () => {
-  console.log(`Server running on port ${process.env.PORT || 5000}`);
+// Start the server with graceful shutdown logic
+const server = app.listen(process.env.PORT || 5001, () => {
+  console.log(`Server running on port ${process.env.PORT || 5001}`);
 });
 
-// Handle SIGTERM signal for graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
+// Handle graceful shutdown
+const shutdown = () => {
+  console.log('Shutting down server...');
   server.close(() => {
     console.log('HTTP server closed');
-    mongoose.connection.close(() => {
+    mongoose.connection.close(false, () => {
       console.log('MongoDB connection closed');
+      process.exit(0);
     });
   });
-});
+};
+
+// Listen for termination signals
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 
 module.exports = app;

@@ -1,49 +1,57 @@
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const User = require('../models/User');  // Adjust the path to your User model
+const User = require('../models/User');
 const dotenv = require('dotenv');
 
 // Load environment variables
 dotenv.config();
 
+// Google OAuth strategy
 passport.use(
   new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: 'http://localhost:5000/auth/google/callback', // Ensure this matches the redirect URI in Google Cloud Console
+      callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:5001/auth/google/callback', // Use environment variable for callback URL
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
-        // Find the user based on the Google profile ID
+        // Check if the Google profile contains the required information (e.g., email)
+        if (!profile.emails || !profile.emails.length) {
+          console.error('Google OAuth profile is missing email information');
+          return done(new Error('Google profile is missing email'), null);
+        }
+
+        // Find or create the user based on the Google profile ID
         let user = await User.findOne({ googleId: profile.id });
 
         if (!user) {
-          // If the user doesn't exist, create a new one
+          // If user doesn't exist, create a new user
           user = new User({
             googleId: profile.id,
-            email: profile.emails[0].value, // Get email from Google profile
-            name: profile.displayName, // Get user's display name
+            email: profile.emails[0].value, // Use the first email from the Google profile
+            name: profile.displayName || 'Unnamed User', // Use the Google display name, fallback to 'Unnamed User'
           });
+
           await user.save();
+          console.log('New user created from Google OAuth:', user);
         }
 
-        // Continue with the found or newly created user
-        return done(null, user);
+        return done(null, user); // Pass the user object to done
       } catch (error) {
-        console.error('Error in Google Strategy:', error);
-        return done(error, null);
+        console.error('Error in Google OAuth strategy:', error);
+        return done(error, null); // Properly handle error
       }
     }
   )
 );
 
-// Serialize the user ID into the session
+// Serialize user by ID into the session
 passport.serializeUser((user, done) => {
-  done(null, user.id); // Serialize user by their ID
+  done(null, user.id);
 });
 
-// Deserialize the user from the session by finding them via their ID
+// Deserialize user by ID from the session
 passport.deserializeUser(async (id, done) => {
   try {
     const user = await User.findById(id);
@@ -53,8 +61,8 @@ passport.deserializeUser(async (id, done) => {
       done(new Error('User not found'), null);
     }
   } catch (error) {
-    console.error('Error in deserialization:', error);
-    done(error, null);
+    console.error('Error during deserialization:', error);
+    done(error, null); // Proper error handling
   }
 });
 

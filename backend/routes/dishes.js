@@ -1,18 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const Dish = require('../models/Dish');
+const {
+  getAllDishes,
+  getDishById,
+  searchDishes,
+} = require('../controllers/dishController'); // Import dish controller functions
 
-// Fetch dish details by ID
-router.get('/:id', async (req, res) => {
-  try {
-    const dish = await Dish.findById(req.params.id);
-    if (!dish) {
-      return res.status(404).json({ message: 'Dish not found' });
-    }
-    res.json(dish);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
+// Search dishes (Place this before /:id to avoid conflicts)
+router.get('/search', searchDishes);
+
+// Get all dishes
+router.get('/', getAllDishes);
+
+// Get dish by ID
+router.get('/:id', getDishById);
 
 module.exports = router;

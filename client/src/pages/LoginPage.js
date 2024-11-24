@@ -1,84 +1,96 @@
+// client/src/components/Login.js
 import React, { useState, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
-import { googleLogin } from '../redux/slices/authSlice';
+import { useNavigate } from 'react-router-dom';
+import { loginUser } from '../redux/slices/authSlice';
+import useGoogleLogin from '../hooks/useGoogleLogin';
+import { validateLoginForm } from '../utils/validation';
+import '../App.css'; 
 
-const LoginPage = () => {
+const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { error: googleError, renderGoogleButton } = useGoogleLogin();
+
+  useEffect(() => {
+    renderGoogleButton('googleSignInButton');
+  }, [renderGoogleButton]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // TODO: Implement login logic (dispatch loginUser with email and password)
-    console.log('Login attempted with:', { email, password });
-  };
+    setIsLoading(true);
+    setErrorMessage('');
 
-  const handleGoogleLogin = () => {
-    if (window.google && window.google.accounts) {
-      window.google.accounts.id.prompt((response) => {
-        if (response.credential) {
-          const tokenId = response.credential;
-          dispatch(googleLogin(tokenId))
-            .unwrap()
-            .then(() => {
-              console.log('Google login successful');
-            })
-            .catch((error) => {
-              setErrorMessage(error.message || 'Google login failed');
-            });
-        } else {
-          setErrorMessage('No credential received from Google login');
-        }
-      });
-    } else {
-      console.error('Google Identity Services not loaded');
+    const errors = validateLoginForm({ email, password });
+    if (Object.keys(errors).length > 0) {
+      setErrorMessage(Object.values(errors).join('. '));
+      setIsLoading(false);
+      return;
     }
-  };
 
-  // Initialize Google Identity Services on component mount
-  useEffect(() => {
-    const initializeGoogleLogin = () => {
-      if (window.google && window.google.accounts) {
-        window.google.accounts.id.initialize({
-          client_id: '315787351849-krk8u0b8mljhqjit732n4sumcolepnst.apps.googleusercontent.com',
-          callback: handleGoogleLogin,
-        });
-        window.google.accounts.id.renderButton(
-          document.getElementById('googleSignInButton'),
-          { theme: 'outline', size: 'large' }
+    dispatch(loginUser({ email, password }))
+      .unwrap()
+      .then(() => {
+        console.log('Login successful');
+        navigate('/'); // Redirect to home/dashboard
+      })
+      .catch((error) => {
+        const message = error.message || 'Login failed';
+        console.error('Login Error:', message);
+        setErrorMessage(
+          message === 'Request failed with status code 401' ? 'Invalid email or password' : message
         );
-      }
-    };
-    initializeGoogleLogin();
-  }, []); // Only run on mount
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  };
 
   return (
-    <div className="container mx-auto p-4">
-      <h2 className="text-2xl font-bold mb-4">Login</h2>
-      <form onSubmit={handleSubmit} className="mb-4">
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className="border mb-2 p-2 w-full"
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          className="border mb-2 p-2 w-full"
-        />
-        <button type="submit" className="bg-blue-500 text-white p-2 w-full">Login</button>
+    <div className="login-container">
+      <h2 className="login-header">Login</h2>
+      {(errorMessage || googleError) && (
+        <p className="error-message">{errorMessage || googleError}</p>
+      )}
+      <form onSubmit={handleSubmit} className="login-form">
+        <div className="form-group">
+          <label htmlFor="email">Email</label>
+          <input
+            type="email"
+            id="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={isLoading}
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            disabled={isLoading}
+          />
+        </div>
+        <button type="submit" className="btn-login" disabled={isLoading}>
+          {isLoading ? 'Logging in...' : 'Login'}
+        </button>
       </form>
-      {errorMessage && <p className="text-red-500">{errorMessage}</p>}
-      <div id="googleSignInButton"></div> {/* Google Sign-In button */}
+      <div id="googleSignInButton"></div>
+      {!window.google && (
+        <p className="error-message">
+          Google login is currently unavailable. Please try again later.
+        </p>
+      )}
     </div>
   );
 };
 
-export default LoginPage;
+export default Login;
