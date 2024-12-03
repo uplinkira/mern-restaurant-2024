@@ -1,115 +1,156 @@
 // client/src/features/product/ProductList.js
-import React, { useEffect, useMemo } from 'react';
+
+import React, { useEffect, useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link } from 'react-router-dom';
-import { fetchProducts } from '../../redux/slices/productSlice';
+import { fetchProductDetails } from '../../redux/slices/productSlice';
 import { addItemToCart } from '../../redux/slices/cartSlice';
 import '../../App.css';
 
-const ProductList = ({ featured = false, limit }) => {
+const ProductDetails = () => {
+  const { slug } = useParams();
   const dispatch = useDispatch();
-  const { 
-    list: allProducts, 
-    status, 
-    error 
-  } = useSelector((state) => state.products);
+  const [quantity, setQuantity] = useState(1);
+
+  const product = useSelector((state) => state.products.currentProduct);
+  const status = useSelector((state) => state.products.status);
+  const error = useSelector((state) => state.products.error);
 
   useEffect(() => {
-    if (status === 'idle') {
-      dispatch(fetchProducts());
+    if (slug) {
+      dispatch(fetchProductDetails(slug));
     }
-  }, [dispatch, status]);
+  }, [dispatch, slug]);
 
-  // Filter and limit products based on props
-  const products = useMemo(() => {
-    let filtered = allProducts;
-    if (featured) {
-      filtered = allProducts.filter(product => product.isFeatured);
+  const handleAddToCart = () => {
+    if (product) {
+      dispatch(
+        addItemToCart({
+          productId: product._id,
+          quantity,
+          price: product.price,
+          name: product.name,
+        })
+      );
     }
-    if (limit && limit > 0) {
-      filtered = filtered.slice(0, limit);
-    }
-    return filtered;
-  }, [allProducts, featured, limit]);
-
-  const handleAddToCart = (product) => {
-    dispatch(addItemToCart({ 
-      productId: product._id, 
-      quantity: 1,
-      price: product.price,
-      name: product.name
-    }));
   };
 
+  // Handling different states of the component
   if (status === 'loading') {
-    return <div className="loading">Loading products...</div>;
+    return <div className="loading">Loading product details...</div>;
   }
 
   if (status === 'failed') {
     return <div className="error">Error: {error}</div>;
   }
 
-  if (!products?.length) {
-    return <div className="no-data">No products available</div>;
+  if (!product || Object.keys(product).length === 0) {
+    return <div className="error">Product not found</div>;
   }
 
   return (
-    <div className="product-list">
-      {!featured && <h2>Our Products</h2>}
-      <div className="product-grid">
-        {products.map((product) => (
-          <div key={product.slug} className="product-card card">
-            <div className="card-content">
-              <h3>{product.name}</h3>
-              <div className="product-info">
-                <span className="category">{product.category}</span>
-                {product.isFeatured && (
-                  <span className="featured-badge">Featured</span>
-                )}
-              </div>
-              <p className="description">
-                {product.description?.substring(0, 150)}
-                {product.description?.length > 150 ? '...' : ''}
-              </p>
-              <div className="product-meta">
-                {product.ingredients?.length > 0 && (
-                  <div className="ingredients">
-                    Main ingredients: {product.ingredients.slice(0, 3).join(', ')}
-                    {product.ingredients.length > 3 ? '...' : ''}
-                  </div>
-                )}
-                {product.allergens?.length > 0 && (
-                  <div className="allergens">
-                    Contains: {product.allergens.join(', ')}
-                  </div>
-                )}
-              </div>
-              <div className="product-footer">
-                <span className="price">¥{product.price.toFixed(2)}</span>
-                <span className="availability">
-                  {product.availableForDelivery ? 'Available for Delivery' : 'In-Store Only'}
-                </span>
-              </div>
-              <div className="action-buttons">
-                <button 
-                  onClick={() => handleAddToCart(product)}
-                  className="btn add-to-cart-btn"
-                >
-                  Add to Cart
-                </button>
-                <Link 
-                  to={`/product/${product.slug}`} 
-                  className="btn view-details-btn"
-                >
-                  View Details
-                </Link>
-              </div>
-            </div>
-          </div>
-        ))}
+    <div className="product-details">
+      <div className="product-header card">
+        <h1>{product.name}</h1>
+        <div className="product-meta">
+          <span className="category">{product.category}</span>
+          {product.isFeatured && (
+            <span className="featured-badge">Featured Product</span>
+          )}
+        </div>
+        <p className="description">{product.description}</p>
       </div>
+
+      <div className="details-grid">
+        <div className="info-card card">
+          <div className="price-info">
+            <h2>Price</h2>
+            <span className="price">¥{product.price.toFixed(2)}</span>
+          </div>
+          <div className="quantity-selector">
+            <label htmlFor="quantity">Quantity:</label>
+            <select
+              id="quantity"
+              value={quantity}
+              onChange={(e) => setQuantity(Number(e.target.value))}
+            >
+              {[1, 2, 3, 4, 5].map((num) => (
+                <option key={num} value={num}>
+                  {num}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={handleAddToCart}
+            className="btn add-to-cart-btn"
+            disabled={!product.availableForDelivery}
+          >
+            Add to Cart
+          </button>
+          {!product.availableForDelivery && (
+            <p className="availability-notice">
+              This product is only available for in-store purchase
+            </p>
+          )}
+        </div>
+
+        {(product.ingredients?.length > 0 || product.allergens?.length > 0) && (
+          <div className="ingredients-info card">
+            {product.ingredients?.length > 0 && (
+              <div className="ingredients-section">
+                <h2>Ingredients</h2>
+                <div className="ingredients-list">
+                  {product.ingredients.map((ingredient, index) => (
+                    <span key={index} className="ingredient-tag">
+                      {ingredient}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {product.allergens?.length > 0 && (
+              <div className="allergens-section">
+                <h2>Allergen Information</h2>
+                <div className="allergens-list">
+                  {product.allergens.map((allergen, index) => (
+                    <span key={index} className="allergen-tag">
+                      {allergen}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {product.caution && (
+          <div className="caution-card card">
+            <h2>Usage Information</h2>
+            <p className="caution-text">{product.caution}</p>
+          </div>
+        )}
+      </div>
+
+      {product.relatedProducts?.length > 0 && (
+        <div className="related-products card">
+          <h2>You Might Also Like</h2>
+          <div className="related-grid">
+            {product.relatedProducts.map((relatedProduct) => (
+              <Link
+                key={relatedProduct.slug}
+                to={`/product/${relatedProduct.slug}`}
+                className="related-product-card"
+              >
+                <h4>{relatedProduct.name}</h4>
+                <span className="price">¥{relatedProduct.price.toFixed(2)}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-export default ProductList;
+export default ProductDetails;

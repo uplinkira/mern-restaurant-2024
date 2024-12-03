@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+// client/src/pages/UserProfile.js
+import React, { useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuth from '../hooks/useAuth';
 import useProfile from '../hooks/useProfile';
@@ -13,31 +14,32 @@ const UserProfile = () => {
     isEditing,
     isLoading,
     error,
-    successMessage,
+    validationErrors,
     handleInputChange,
     startEditing,
     cancelEdit,
     handleSubmit,
-    loadProfile
+    loadProfile,
   } = useProfile();
 
-  useEffect(() => {
-    const initProfile = async () => {
-      if (!checkAuth()) {
-        navigate('/login');
-        return;
-      }
-      await loadProfile();
-    };
-    initProfile();
+  const initProfile = useCallback(async () => {
+    if (!checkAuth()) {
+      navigate('/login');
+      return;
+    }
+    loadProfile();
   }, [checkAuth, navigate, loadProfile]);
+
+  useEffect(() => {
+    initProfile();
+  }, [initProfile]);
 
   const formFields = [
     { name: 'firstName', label: 'First Name', type: 'text', required: true },
     { name: 'lastName', label: 'Last Name', type: 'text', required: true },
-    { name: 'email', label: 'Email', type: 'email', required: true, readOnly: true },
+    { name: 'email', label: 'Email', type: 'email', required: true },
     { name: 'phoneNumber', label: 'Phone Number', type: 'tel' },
-    { name: 'address', label: 'Address', type: 'text' }
+    { name: 'address', label: 'Address', type: 'text' },
   ];
 
   const onSubmit = async (e) => {
@@ -53,9 +55,15 @@ const UserProfile = () => {
     <div className="profile-container">
       <div className="profile-content">
         <h2>Profile Settings</h2>
-        
+
         {error && <div className="error-message">{error}</div>}
-        {successMessage && <div className="success-message">{successMessage}</div>}
+        {validationErrors && (
+          <div className="error-message">
+            {validationErrors.map((err, index) => (
+              <div key={index}>{err}</div>
+            ))}
+          </div>
+        )}
 
         <form onSubmit={onSubmit} className="profile-form">
           <div className="form-section">
@@ -72,8 +80,8 @@ const UserProfile = () => {
                   name={name}
                   value={formData[name]}
                   onChange={(e) => handleInputChange(e.target.name, e.target.value)}
-                  disabled={name === 'email' ? true : !isEditing}
-                  className={`form-input ${!isEditing || name === 'email' ? 'disabled' : ''}`}
+                  disabled={!isEditing}
+                  className={`form-input ${!isEditing ? 'disabled' : ''}`}
                   required={required}
                 />
               </div>
@@ -141,8 +149,8 @@ const UserProfile = () => {
                 </button>
               </>
             ) : (
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="btn-edit"
                 onClick={startEditing}
               >

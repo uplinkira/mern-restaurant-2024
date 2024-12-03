@@ -1,190 +1,151 @@
+// client/src/features/search/SearchBar.js
 import { useDispatch, useSelector } from 'react-redux';
 import { searchItems, clearSearchResults, setFilter } from '../../redux/slices/searchSlice';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 
 const SearchBar = () => {
- const [query, setQuery] = useState('');
- const dispatch = useDispatch();
- const { 
-   activeFilter,
-   restaurants, 
-   menus, 
-   dishes, 
-   products, 
-   loading, 
-   error 
- } = useSelector((state) => state.search);
+  const [query, setQuery] = useState('');
+  const dispatch = useDispatch();
+  const { 
+    activeFilter,
+    restaurants, 
+    dishes, 
+    products, 
+    loading, 
+    error 
+  } = useSelector((state) => state.search);
 
- useEffect(() => {
-   const timer = setTimeout(() => {
-     if (query.trim()) {
-       dispatch(searchItems({ query, filter: activeFilter }));
-     }
-   }, 500);
+  const handleSearch = useCallback((searchQuery, filter) => {
+    if (searchQuery.trim()) {
+      dispatch(searchItems({ query: searchQuery, filter }));
+    }
+  }, [dispatch]);
 
-   return () => clearTimeout(timer);
- }, [query, activeFilter, dispatch]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleSearch(query, activeFilter);
+    }, 500);
 
- const handleFilterChange = (newFilter) => {
-   dispatch(setFilter(newFilter));
-   if (query.trim()) {
-     dispatch(searchItems({ query, filter: newFilter }));
-   }
- };
+    return () => clearTimeout(timer);
+  }, [query, activeFilter, handleSearch]);
 
- const handleClear = () => {
-   setQuery('');
-   dispatch(clearSearchResults());
- };
+  const handleFilterChange = (newFilter) => {
+    dispatch(setFilter(newFilter));
+    handleSearch(query, newFilter);
+  };
 
- return (
-   <div className="search-container">
-     <div className="filter-buttons">
-       <button
-         className={`filter-btn ${activeFilter === 'restaurant' ? 'active' : ''}`}
-         onClick={() => handleFilterChange('restaurant')}
-       >
-         Restaurants
-       </button>
-       <button
-         className={`filter-btn ${activeFilter === 'menu' ? 'active' : ''}`}
-         onClick={() => handleFilterChange('menu')}
-       >
-         Menus
-       </button>
-       <button
-         className={`filter-btn ${activeFilter === 'dish' ? 'active' : ''}`}
-         onClick={() => handleFilterChange('dish')}
-       >
-         Dishes
-       </button>
-       <button
-         className={`filter-btn ${activeFilter === 'product' ? 'active' : ''}`}
-         onClick={() => handleFilterChange('product')}
-       >
-         Products
-       </button>
-     </div>
+  const handleClear = () => {
+    setQuery('');
+    dispatch(clearSearchResults());
+  };
 
-     <div className="search-input-container">
-       <input
-         type="text"
-         value={query}
-         onChange={(e) => setQuery(e.target.value)}
-         placeholder={`Search for ${activeFilter}s...`}
-         className="search-input"
-       />
-       <button 
-         onClick={handleClear} 
-         disabled={loading || !query.trim()} 
-         className="clear-btn"
-       >
-         Clear
-       </button>
-       <button 
-         onClick={() => dispatch(searchItems({ query, filter: activeFilter }))} 
-         disabled={loading} 
-         className="search-btn"
-       >
-         {loading ? 'Searching...' : 'Search'}
-       </button>
-     </div>
+  const renderSearchResults = () => {
+    if (!query.trim()) return null;
 
-     {error && <p className="error-message">{error}</p>}
-     {loading && <p className="loading-message">Loading results...</p>}
+    const resultMap = {
+      restaurant: {
+        items: restaurants,
+        title: 'Restaurants',
+        render: (item) => (
+          <Link to={`/restaurant/${item.slug}`} className="result-link">
+            <span className="name">{item.name}</span>
+            {item.cuisineType && <span className="cuisine-type">{item.cuisineType}</span>}
+            {item.vrExperience && <span className="vr-badge">VR</span>}
+          </Link>
+        )
+      },
+      dish: {
+        items: dishes,
+        title: 'Dishes',
+        render: (item) => (
+          <Link to={`/dish/${item.slug}`} className="result-link">
+            <span className="name">{item.name}</span>
+            <span className="price">{item.formattedPrice}</span>
+            {item.signature && <span className="signature-badge">Signature</span>}
+            {item.allergenAlert && <span className="allergen-info">{item.allergenAlert}</span>}
+          </Link>
+        )
+      },
+      product: {
+        items: products,
+        title: 'Products',
+        render: (item) => (
+          <Link to={`/product/${item.slug}`} className="result-link">
+            <span className="name">{item.name}</span>
+            <span className="price">{item.formattedPrice}</span>
+            {item.featured && <span className="featured-badge">Featured</span>}
+            {item.availability && <span className="availability">{item.availability}</span>}
+          </Link>
+        )
+      }
+    };
 
-     <div className="search-results">
-       {activeFilter === 'restaurant' && (
-         <>
-           <h3>Restaurants</h3>
-           {restaurants.length > 0 ? (
-             <ul className="results-list">
-               {restaurants.map((restaurant) => (
-                 <li key={restaurant.slug} className="result-item">
-                   <a href={`/restaurant/${restaurant.slug}`} className="result-link">
-                     {restaurant.name}
-                     {restaurant.cuisineType && <span className="cuisine-type">{restaurant.cuisineType}</span>}
-                     {restaurant.vrExperience && <span className="vr-badge">VR</span>}
-                   </a>
-                 </li>
-               ))}
-             </ul>
-           ) : (
-             <p className="no-results">No restaurants found</p>
-           )}
-         </>
-       )}
+    const currentResult = resultMap[activeFilter];
+    if (!currentResult) return null;
 
-       {activeFilter === 'menu' && (
-         <>
-           <h3>Menus</h3>
-           {menus.length > 0 ? (
-             <ul className="results-list">
-               {menus.map((menu) => (
-                 <li key={menu.slug} className="result-item">
-                   <a href={`/menu/${menu.slug}`} className="result-link">
-                     {menu.name}
-                     {menu.dishCount > 0 && 
-                       <span className="dish-count">{menu.dishCount} dishes</span>
-                     }
-                   </a>
-                 </li>
-               ))}
-             </ul>
-           ) : (
-             <p className="no-results">No menus found</p>
-           )}
-         </>
-       )}
+    return (
+      <div className="search-results">
+        <h3>{currentResult.title}</h3>
+        {currentResult.items.length > 0 ? (
+          <ul className="results-list">
+            {currentResult.items.map((item) => (
+              <li key={item.slug} className="result-item">
+                {currentResult.render(item)}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="no-results">No {activeFilter}s found</p>
+        )}
+      </div>
+    );
+  };
 
-       {activeFilter === 'dish' && (
-         <>
-           <h3>Dishes</h3>
-           {dishes.length > 0 ? (
-             <ul className="results-list">
-               {dishes.map((dish) => (
-                 <li key={dish.slug} className="result-item">
-                   <a href={`/dish/${dish.slug}`} className="result-link">
-                     {dish.name}
-                     <span className="price">{dish.formattedPrice}</span>
-                     {dish.signature && <span className="signature-badge">Signature</span>}
-                     {dish.allergenAlert && <span className="allergen-info">{dish.allergenAlert}</span>}
-                   </a>
-                 </li>
-               ))}
-             </ul>
-           ) : (
-             <p className="no-results">No dishes found</p>
-           )}
-         </>
-       )}
+  return (
+    <div className="search-container">
+      <div className="filter-buttons">
+        {['restaurant', 'dish', 'product'].map((filter) => (
+          <button
+            key={filter}
+            className={`filter-btn ${activeFilter === filter ? 'active' : ''}`}
+            onClick={() => handleFilterChange(filter)}
+          >
+            {filter === 'dish' ? 'Dishes' : `${filter.charAt(0).toUpperCase() + filter.slice(1)}s`}
+          </button>
+        ))}
+      </div>
 
-       {activeFilter === 'product' && (
-         <>
-           <h3>Products</h3>
-           {products.length > 0 ? (
-             <ul className="results-list">
-               {products.map((product) => (
-                 <li key={product.slug} className="result-item">
-                   <a href={`/product/${product.slug}`} className="result-link">
-                     {product.name}
-                     <span className="price">{product.formattedPrice}</span>
-                     {product.featured && <span className="featured-badge">Featured</span>}
-                     {product.availability && 
-                       <span className="availability">{product.availability}</span>
-                     }
-                   </a>
-                 </li>
-               ))}
-             </ul>
-           ) : (
-             <p className="no-results">No products found</p>
-           )}
-         </>
-       )}
-     </div>
-   </div>
- );
+      <div className="search-input-container">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={`Search for ${activeFilter}s...`}
+          className="search-input"
+        />
+        <button 
+          onClick={() => handleSearch(query, activeFilter)}
+          disabled={loading || !query.trim()} 
+          className="search-btn"
+        >
+          Go
+        </button>
+        <button 
+          onClick={handleClear} 
+          disabled={loading || !query.trim()} 
+          className="clear-btn"
+        >
+          Clear
+        </button>
+      </div>
+
+      {error && <p className="error-message">{error}</p>}
+      {loading && <p className="loading-message">Loading results...</p>}
+
+      {renderSearchResults()}
+    </div>
+  );
 };
 
 export default SearchBar;

@@ -1,3 +1,4 @@
+// backend/models/Menu.js
 const mongoose = require('mongoose');
 
 // Define the Menu schema

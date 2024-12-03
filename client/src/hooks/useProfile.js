@@ -1,167 +1,129 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
- fetchUserProfile,
- updateUserProfile,
- setIsEditing,
- cancelEditing,
- selectUserProfile,
- selectUserStatus,
- selectUserError,
- selectIsEditing,
- selectValidationErrors,
- selectIsDirty
+  fetchUserProfile,
+  updateUserProfile,
+  selectUserProfile,
+  selectUserStatus,
+  selectUserError,
+  selectValidationErrors,
+  setIsEditing,
+  updateProfileField,
+  cancelEditing,
 } from '../redux/slices/userSlice';
 
 const useProfile = () => {
- const dispatch = useDispatch();
- 
- const profile = useSelector(selectUserProfile);
- const status = useSelector(selectUserStatus);
- const error = useSelector(selectUserError);
- const isEditing = useSelector(selectIsEditing);
- const validationErrors = useSelector(selectValidationErrors);
- const isDirty = useSelector(selectIsDirty);
+  const dispatch = useDispatch();
+  const profile = useSelector(selectUserProfile);
+  const status = useSelector(selectUserStatus);
+  const error = useSelector(selectUserError);
+  const validationErrors = useSelector(selectValidationErrors);
+  const isEditing = useSelector((state) => state.user.isEditing);
 
- const [formData, setFormData] = useState({
-   firstName: '',
-   lastName: '',
-   phoneNumber: '',
-   email: '',
-   password: '',
-   confirmPassword: '',
-   bio: '',
-   address: ''
- });
- const [localErrors, setLocalErrors] = useState({});
- const [successMessage, setSuccessMessage] = useState('');
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phoneNumber: '',
+    address: '',
+    bio: '',
+    password: '',
+    confirmPassword: '',
+  });
 
- useEffect(() => {
-   if (profile) {
-     setFormData(current => ({
-       ...current,
-       firstName: profile.firstName || '',
-       lastName: profile.lastName || '',
-       phoneNumber: profile.phoneNumber || '',
-       email: profile.email || '',
-       bio: profile.bio || '',
-       address: profile.address || '',
-       password: current.password || '',
-       confirmPassword: current.confirmPassword || ''
-     }));
-   }
- }, [profile]);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [validationErrorsLocal, setValidationErrors] = useState([]);
 
- const handleInputChange = useCallback((name, value) => {
-   setFormData(prev => ({ ...prev, [name]: value }));
-   setLocalErrors(prev => ({ ...prev, [name]: null }));
-   setSuccessMessage('');
- }, []);
+  // Define loadProfile before using it
+  const loadProfile = useCallback(() => {
+    dispatch(fetchUserProfile());
+  }, [dispatch]);
 
- const startEditing = useCallback(() => {
-   if (profile) {
-     setFormData({
-       firstName: profile.firstName || '',
-       lastName: profile.lastName || '',
-       phoneNumber: profile.phoneNumber || '',
-       email: profile.email || '',
-       bio: profile.bio || '',
-       address: profile.address || '',
-       password: '',
-       confirmPassword: ''
-     });
-   }
-   dispatch(setIsEditing(true));
-   setLocalErrors({});
-   setSuccessMessage('');
- }, [dispatch, profile]);
+  // Load profile data when the component mounts
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
- const cancelEdit = useCallback(() => {
-   if (profile) {
-     setFormData({
-       firstName: profile.firstName || '',
-       lastName: profile.lastName || '',
-       phoneNumber: profile.phoneNumber || '',
-       email: profile.email || '',
-       bio: profile.bio || '',
-       address: profile.address || '',
-       password: '',
-       confirmPassword: ''
-     });
-   }
-   dispatch(cancelEditing());
-   setLocalErrors({});
-   setSuccessMessage('');
- }, [dispatch, profile]);
+  // Update formData when profile changes
+  useEffect(() => {
+    if (profile) {
+      setFormData({
+        firstName: profile.firstName || '',
+        lastName: profile.lastName || '',
+        email: profile.email || '',
+        phoneNumber: profile.phoneNumber || '',
+        address: profile.address || '',
+        bio: profile.bio || '',
+        password: '',
+        confirmPassword: '',
+      });
+    }
+  }, [profile]);
 
- const handleSubmit = useCallback(async (validationFn) => {
-   if (!isEditing) return false;
+  const handleInputChange = (name, value) => {
+    setFormData((prevData) => ({
+      ...prevData,
+      [name]: value,
+    }));
+    if (isEditing) {
+      dispatch(updateProfileField({ [name]: value }));
+    }
+  };
 
-   const errors = validationFn?.(formData) || {};
-   if (Object.keys(errors).length > 0) {
-     setLocalErrors(errors);
-     return false;
-   }
+  const startEditing = () => {
+    dispatch(setIsEditing(true));
+  };
 
-   const updateData = {
-     ...formData,
-     ...(formData.password ? {
-       password: formData.password,
-       confirmPassword: formData.confirmPassword
-     } : {})
-   };
+  const cancelEdit = () => {
+    dispatch(cancelEditing());
+    setSuccessMessage('');
+    setValidationErrors([]);
+    if (profile) {
+      setFormData({
+        firstName: profile.firstName || '',
+        lastName: profile.lastName || '',
+        email: profile.email || '',
+        phoneNumber: profile.phoneNumber || '',
+        address: profile.address || '',
+        bio: profile.bio || '',
+        password: '',
+        confirmPassword: '',
+      });
+    }
+  };
 
-   try {
-     await dispatch(updateUserProfile(updateData)).unwrap();
-     await dispatch(fetchUserProfile()).unwrap();
-     dispatch(setIsEditing(false));
-     setSuccessMessage('Profile updated successfully');
-     return true;
-   } catch (error) {
-     console.error('Profile update error:', error);
-     setLocalErrors({ submit: error.message || 'Update failed' });
-     return false;
-   }
- }, [dispatch, formData, isEditing]);
+  const handleSubmit = async (validate) => {
+    const errors = validate(formData);
+    if (errors && errors.length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+    const resultAction = await dispatch(updateUserProfile(formData));
+    if (updateUserProfile.fulfilled.match(resultAction)) {
+      // Success handling
+      setSuccessMessage('Profile updated successfully');
+      setValidationErrors([]);
+      dispatch(setIsEditing(false));
+    } else {
+      // Error handling
+      setSuccessMessage('');
+      setValidationErrors(resultAction.payload.validationErrors || []);
+    }
+  };
 
- const loadProfile = useCallback(async () => {
-   try {
-     const result = await dispatch(fetchUserProfile()).unwrap();
-     if (result) {
-       setFormData({
-         firstName: result.firstName || '',
-         lastName: result.lastName || '',
-         phoneNumber: result.phoneNumber || '',
-         email: result.email || '',
-         bio: result.bio || '',
-         address: result.address || '',
-         password: '',
-         confirmPassword: ''
-       });
-     }
-     return true;
-   } catch (error) {
-     console.error('Profile load error:', error);
-     setLocalErrors({ load: error.message || 'Failed to load profile' });
-     return false;
-   }
- }, [dispatch]);
-
- return {
-   profile,
-   formData,
-   isEditing,
-   isLoading: status === 'loading',
-   error: error || localErrors.submit || localErrors.load,
-   validationErrors: { ...validationErrors, ...localErrors },
-   successMessage,
-   isDirty,
-   handleInputChange,
-   startEditing,
-   cancelEdit,
-   handleSubmit,
-   loadProfile
- };
+  return {
+    formData,
+    isEditing,
+    isLoading: status === 'loading',
+    error,
+    validationErrors: validationErrorsLocal.length > 0 ? validationErrorsLocal : validationErrors,
+    successMessage,
+    handleInputChange,
+    startEditing,
+    cancelEdit,
+    handleSubmit,
+    loadProfile,
+  };
 };
 
 export default useProfile;

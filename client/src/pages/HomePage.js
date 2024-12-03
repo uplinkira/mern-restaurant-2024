@@ -1,55 +1,69 @@
-// client/src/pages/HomePage.js
+// client/src/pages/HomePage.js - Simplified version
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import RestaurantList from '../features/restaurant/RestaurantList';
 import SearchBar from '../features/search/SearchBar';
-import ProductList from '../features/product/ProductList'; // 添加这个导入用于显示特色产品
+import ProductList from '../features/product/ProductList';
+import { selectSearchResults } from '../redux/slices/searchSlice';
 import '../App.css';
 
 const HomePage = () => {
+  const searchResults = useSelector(selectSearchResults);
+  
   return (
     <div className="home-container">
-      <section className="hero-section">
-        <h1>Welcome to Chen Pi Cuisine</h1>
-        <p>Discover authentic Chinese dishes and premium Chen Pi products</p>
-        <div className="search-container">
-          <SearchBar />
+      <section className="hero-section" aria-label="welcome banner">
+        <div className="hero-content">
+          <h1>Welcome to Chen Pi Cuisine</h1>
+          <p>Discover authentic Chinese dishes and premium Chen Pi products</p>
+          <p className="subtitle">Experience traditional flavors enhanced by aged Chen Pi</p>
+        </div>
+        
+        <div className="search-section" aria-label="unified search">
+          <div className="search-container">
+            <h2>Explore Our Collection</h2>
+            <SearchBar enhanced={true} showFilters={true} />
+          </div>
+
+          {searchResults.length > 0 && (
+            <div className="quick-results">
+              <Link to="/search" className="view-results-link">
+                View All Results
+              </Link>
+            </div>
+          )}
         </div>
       </section>
 
-      <section className="main-content">
-        <div className="section-header">
-          <h2>Our Restaurants</h2>
-          <Link to="/restaurants" className="view-all-link">
-            View All
-          </Link>
-        </div>
-        <RestaurantList limit={3} /> {/* Show only 3 restaurants on homepage */}
-      </section>
-
-      <section className="featured-section">
-        <div className="section-header">
-          <h2>Featured Products</h2>
-          <Link to="/products" className="view-all-link">
-            Shop All
-          </Link>
-        </div>
-        <ProductList featured={true} limit={4} />
-      </section>
-
-      <section className="cta-section">
-        <div className="cta-content">
-          <h2>Experience Chen Pi</h2>
-          <p>Join us for an authentic dining experience or shop our premium products</p>
-          <div className="cta-buttons">
-            <Link to="/restaurants" className="btn btn-primary">
-              Find a Restaurant
-            </Link>
-            <Link to="/products" className="btn btn-secondary">
-              Shop Products
+      <section className="featured-content">
+        <article className="featured-restaurants">
+          <div className="section-header">
+            <h2>Featured Restaurants</h2>
+            <Link to="/restaurants" className="view-all-link">
+              View All Restaurants
             </Link>
           </div>
-        </div>
+          <RestaurantList 
+            limit={3} 
+            displayAsFeatured={true} 
+            className="featured-grid"
+          />
+        </article>
+
+        <article className="featured-products">
+          <div className="section-header">
+            <h2>Premium Products</h2>
+            <Link to="/products" className="view-all-link">
+              Shop All Products
+            </Link>
+          </div>
+          <ProductList 
+            featured={true} 
+            limit={4} 
+            className="featured-grid"
+          />
+        </article>
       </section>
     </div>
   );

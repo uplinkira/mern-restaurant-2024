@@ -1,3 +1,4 @@
+// backend/routes/dishes.js
 const express = require('express');
 const router = express.Router();
 const Dish = require('../models/Dish');

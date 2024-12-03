@@ -157,7 +157,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .search-input-container {
   display: flex;
-  gap: 1rem;
+  gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
@@ -167,6 +167,40 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 1rem;
+}
+
+.search-btn,
+.clear-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.3s ease;
+}
+
+.search-btn {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.search-btn:hover {
+  background-color: #a51a2d;
+}
+
+.search-btn:disabled,
+.clear-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.clear-btn {
+  background-color: #f0f0f0;
+  color: var(--text-color);
+}
+
+.clear-btn:hover {
+  background-color: #e0e0e0;
 }
 
 /* Keep Original Card Styles */
@@ -299,4 +333,102 @@ textarea:disabled {
   background-color: #f5f5f5 !important;
   cursor: not-allowed !important;
   opacity: 0.7 !important;
+}
+
+/* 修改或添加品牌标题样式 */
+.brand {
+  color: var(--secondary-color);  /* 金色 */
+  font-family: 'Playfair Display', serif;
+  font-size: 2rem;
+  font-weight: bold;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.brand:hover {
+  color: var(--nav-hover-color);
+}
+
+/* Dish Details Styles */
+.dish-details {
+  max-width: 1200px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.dish-header {
+  position: relative;
+  margin-bottom: 2rem;
+}
+
+.signature-badge {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  margin-left: 1rem;
+  font-size: 0.9rem;
+}
+
+.chen-pi-age {
+  color: var(--primary-color);
+  font-weight: 600;
+  margin-left: 1rem;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.ingredient-tag, .allergen-tag, .menu-tag {
+  background-color: #f0f0f0;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  margin: 0.25rem;
+  display: inline-block;
+}
+
+.restaurant-list, .related-dishes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.restaurant-card, .related-dish-card {
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.restaurant-card:hover, .related-dish-card:hover {
+  box-shadow: var(--hover-shadow);
+  border-color: var(--primary-color);
+}
+
+.price-info {
+  display: flex;
+  align-items: center;
+  margin: 1rem 0;
+}
+
+.price {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: var(--primary-color);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .restaurant-list, .related-dishes {
+    grid-template-columns: 1fr;
+  }
 }

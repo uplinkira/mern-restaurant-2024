@@ -1,3 +1,4 @@
+// backend/models/Product.js
 const mongoose = require('mongoose');
 
 // Define the Product schema

@@ -1,4 +1,5 @@
 // backend/controllers/authController.js
+
 const { check, validationResult } = require('express-validator');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
@@ -7,27 +8,29 @@ const { OAuth2Client } = require('google-auth-library');
 // Initialize OAuth client with timeout and retry options
 const client = new OAuth2Client({
   clientId: process.env.GOOGLE_CLIENT_ID,
-  timeout: 5000,  // 5 seconds timeout
+  timeout: 5000, // 5 seconds timeout
   retry: true,
-  retries: 3
+  retries: 3,
 });
 
 // Constants
 const JWT_CONFIG = {
   expiresIn: '24h',
-  algorithm: 'HS256'
+  algorithm: 'HS256',
 };
 
 // Helper functions
 const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, JWT_CONFIG);
+  const token = jwt.sign({ userId }, process.env.JWT_SECRET, JWT_CONFIG);
+  console.log('Generated JWT token with payload:', { userId });
+  return token;
 };
 
 const standardResponse = (res, status, success, message, data = null) => {
   res.status(status).json({
     success,
     message,
-    data
+    data,
   });
 };
 
@@ -55,7 +58,7 @@ const validateRegister = [
     .isLength({ min: 3 })
     .withMessage('Username must be at least 3 characters long')
     .matches(/^[a-zA-Z0-9_]+$/)
-    .withMessage('Username can only contain letters, numbers and underscores')
+    .withMessage('Username can only contain letters, numbers and underscores'),
 ];
 
 const validateLogin = [
@@ -63,10 +66,7 @@ const validateLogin = [
     .isEmail()
     .withMessage('Please enter a valid email')
     .normalizeEmail(),
-  check('password')
-    .not()
-    .isEmpty()
-    .withMessage('Password is required')
+  check('password').not().isEmpty().withMessage('Password is required'),
 ];
 
 // Controller functions
@@ -74,31 +74,33 @@ const register = async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return standardResponse(res, 400, false, 'Validation failed', { 
-        errors: errors.array() 
+      return standardResponse(res, 400, false, 'Validation failed', {
+        errors: errors.array(),
       });
     }
 
-    const { 
-      email, 
-      password, 
-      username, 
-      firstName = '', 
-      lastName = '', 
-      phoneNumber = null 
+    const {
+      email,
+      password,
+      username,
+      firstName = '',
+      lastName = '',
+      phoneNumber = null,
     } = req.body;
 
     // Check existing user
-    const existingUser = await User.findOne({ 
-      $or: [{ email: email.toLowerCase() }, { username }] 
+    const existingUser = await User.findOne({
+      $or: [{ email: email.toLowerCase() }, { username }],
     });
-    
+
     if (existingUser) {
       return standardResponse(
-        res, 
-        400, 
-        false, 
-        existingUser.email === email.toLowerCase() ? 'Email already registered' : 'Username already taken'
+        res,
+        400,
+        false,
+        existingUser.email === email.toLowerCase()
+          ? 'Email already registered'
+          : 'Username already taken'
       );
     }
 
@@ -109,7 +111,7 @@ const register = async (req, res) => {
       password,
       firstName,
       lastName,
-      phoneNumber
+      phoneNumber,
     });
 
     await user.save();
@@ -118,11 +120,10 @@ const register = async (req, res) => {
     const token = generateToken(user._id);
     const userData = user.toAuthJSON();
 
-    standardResponse(res, 201, true, 'Registration successful', { 
-      user: userData, 
-      token 
+    standardResponse(res, 201, true, 'Registration successful', {
+      user: userData,
+      token,
     });
-
   } catch (error) {
     handleError(error, res, 'Registration');
   }
@@ -132,8 +133,8 @@ const login = async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return standardResponse(res, 400, false, 'Validation failed', { 
-        errors: errors.array() 
+      return standardResponse(res, 400, false, 'Validation failed', {
+        errors: errors.array(),
       });
     }
 
@@ -149,9 +150,9 @@ const login = async (req, res) => {
     // Check account lock
     if (user.lockUntil && user.lockUntil > Date.now()) {
       return standardResponse(
-        res, 
-        403, 
-        false, 
+        res,
+        403,
+        false,
         `Account is locked. Please try again after ${new Date(user.lockUntil).toLocaleString()}`
       );
     }
@@ -172,11 +173,10 @@ const login = async (req, res) => {
     const token = generateToken(user._id);
     const userData = user.toAuthJSON();
 
-    standardResponse(res, 200, true, 'Login successful', { 
-      user: userData, 
-      token 
+    standardResponse(res, 200, true, 'Login successful', {
+      user: userData,
+      token,
     });
-
   } catch (error) {
     handleError(error, res, 'Login');
   }
@@ -194,26 +194,20 @@ const googleLogin = async (req, res) => {
     try {
       ticket = await client.verifyIdToken({
         idToken: credential,
-        audience: process.env.GOOGLE_CLIENT_ID
+        audience: process.env.GOOGLE_CLIENT_ID,
       });
     } catch (verifyError) {
       console.error('Google token verification error:', verifyError);
       return standardResponse(res, 401, false, 'Failed to verify Google token');
     }
 
-    const { 
-      sub: googleId, 
-      email, 
-      name, 
-      given_name, 
-      family_name 
-    } = ticket.getPayload();
+    const { sub: googleId, email, name, given_name, family_name } = ticket.getPayload();
 
     const normalizedEmail = email.toLowerCase();
 
     // Find or create user with enhanced error handling
-    let user = await User.findOne({ 
-      $or: [{ authProviderId: googleId }, { email: normalizedEmail }] 
+    let user = await User.findOne({
+      $or: [{ authProviderId: googleId }, { email: normalizedEmail }],
     });
 
     if (!user) {
@@ -224,7 +218,7 @@ const googleLogin = async (req, res) => {
         firstName: given_name || '',
         lastName: family_name || '',
         authProviderId: googleId,
-        authProvider: 'google'
+        authProvider: 'google',
       });
     } else if (!user.authProviderId) {
       // Link existing account with Google
@@ -242,11 +236,10 @@ const googleLogin = async (req, res) => {
     const token = generateToken(user._id);
     const userData = user.toAuthJSON();
 
-    standardResponse(res, 200, true, 'Google login successful', { 
-      user: userData, 
-      token 
+    standardResponse(res, 200, true, 'Google login successful', {
+      user: userData,
+      token,
     });
-
   } catch (error) {
     handleError(error, res, 'Google login');
   }
@@ -257,5 +250,5 @@ module.exports = {
   validateLogin,
   register,
   login,
-  googleLogin
+  googleLogin,
 };

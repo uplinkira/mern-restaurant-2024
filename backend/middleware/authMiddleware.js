@@ -1,4 +1,5 @@
 // backend/middleware/authMiddleware.js
+
 const jwt = require('jsonwebtoken');
 const { check, validationResult } = require('express-validator');
 
@@ -26,7 +27,7 @@ const authMiddleware = (req, res, next) => {
     console.error('Authorization header missing or malformed:', {
       header: authHeader,
       path: req.path,
-      method: req.method
+      method: req.method,
     });
     return standardResponse(res, 401, false, 'Authorization header missing or malformed');
   }
@@ -37,21 +38,23 @@ const authMiddleware = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET, JWT_CONFIG);
     console.log('🔓 Token verified successfully:', {
-      userId: decoded.userId,
+      decoded,
       iat: new Date(decoded.iat * 1000).toISOString(),
-      exp: new Date(decoded.exp * 1000).toISOString()
+      exp: new Date(decoded.exp * 1000).toISOString(),
     });
 
-    if (!decoded.userId) {
+    // Adjusted to check multiple possible keys for user ID
+    const userId = decoded.userId || decoded.id || decoded._id;
+    if (!userId) {
       console.error('Invalid token: missing userId in payload:', decoded);
       return standardResponse(res, 401, false, 'Invalid token: missing user information');
     }
 
-    req.userId = decoded.userId;
+    req.userId = userId;
     console.log('✅ User authenticated:', {
       userId: req.userId,
       path: req.path,
-      method: req.method
+      method: req.method,
     });
     next();
   } catch (error) {
@@ -129,7 +132,9 @@ const handleValidationErrors = (req, res, next) => {
 // Role-based authorization middleware
 const requireRole = (role) => (req, res, next) => {
   if (req.user?.role !== role) {
-    console.error(`Access denied: User role "${req.user?.role}" does not match required role "${role}"`);
+    console.error(
+      `Access denied: User role "${req.user?.role}" does not match required role "${role}"`
+    );
     return standardResponse(res, 403, false, 'Insufficient permissions');
   }
   next();

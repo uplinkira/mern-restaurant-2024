@@ -1,3 +1,4 @@
+// backend/models/Dish.js
 const mongoose = require('mongoose');
 
 // Define the Dish schema

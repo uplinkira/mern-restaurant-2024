@@ -51,7 +51,8 @@ client/src
 │   │   │   ├── Cart.js
 │   │   │   └── Checkout.js
 │   │   ├── dish
-│   │   │   └── DishDetails.js
+│   │   │   ├── DishDetails.js
+│   │   │   └── DishList.js
 │   │   ├── order
 │   │   │   ├── OrderHistory.js
 │   │   │   └── PaymentForm.js
@@ -60,7 +61,7 @@ client/src
 │   │   │   └── ProductList.js
 │   │   ├── restaurant
 │   │   │   ├── MenuSection.js
-│   │   │   ├── RestaurantInfo.js
+│   │   │   ├── RestaurantDetails.js
 │   │   │   └── RestaurantList.js
 │   │   └── search
 │   │   │   ├── SearchBar.js
@@ -73,10 +74,8 @@ client/src
 │   ├── index.js
 │   ├── logo.svg
 │   ├── pages
-│   │   ├── DishPage.js
 │   │   ├── HomePage.js
 │   │   ├── LoginPage.js
-│   │   ├── ProductPage.js
 │   │   ├── RegisterPage.js
 │   │   ├── RestaurantPage.js
 │   │   └── UserProfile.js

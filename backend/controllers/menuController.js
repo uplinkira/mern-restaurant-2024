@@ -1,3 +1,4 @@
+// backend/controllers/menuController.js
 const Menu = require('../models/Menu');
 const Restaurant = require('../models/Restaurant');
 

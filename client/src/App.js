@@ -8,16 +8,20 @@ import Header from './common/Header';
 import Footer from './common/Footer';
 
 // Feature Components
-import RestaurantList from './features/restaurant/RestaurantList';
-import RestaurantInfo from './features/restaurant/RestaurantInfo';  
-import MenuSection from './features/restaurant/MenuSection';  
-import DishDetails from './features/dish/DishDetails';
-import ProductDetails from './features/product/ProductDetails';
 import SearchBar from './features/search/SearchBar';
 import SearchResults from './features/search/SearchResults';
+
+import RestaurantList from './features/restaurant/RestaurantList';
+import RestaurantDetails from './features/restaurant/RestaurantDetails';  
+import MenuSection from './features/restaurant/MenuSection';  
+
+import DishDetails from './features/dish/DishDetails';
+import DishList from './features/dish/DishList';
+
+import ProductDetails from './features/product/ProductDetails';
+import ProductList from './features/product/ProductList';
 import Cart from './features/cart/Cart';
 import Checkout from './features/cart/Checkout';
-import ProductList from './features/product/ProductList';
 
 // Pages
 import UserProfile from './pages/UserProfile';
@@ -79,8 +83,6 @@ function App() {
  const navItems = isAuthenticated 
    ? [
        { to: '/', label: 'Home' },
-       { to: '/restaurants', label: 'Restaurants' },
-       { to: '/products', label: 'Shop' },
        { to: '/profile', label: 'Profile' },
        { to: '/cart', label: 'Cart' },
        { 
@@ -91,8 +93,6 @@ function App() {
      ]
    : [
        { to: '/', label: 'Home' },
-       { to: '/restaurants', label: 'Restaurants' },
-       { to: '/products', label: 'Shop' },
        { to: '/register', label: 'Register' },
        { to: '/login', label: 'Login' }
      ];
@@ -115,17 +115,13 @@ function App() {
      />
 
      <main className="main-content">
-       <div className="search-section">
-         <SearchBar />
-       </div>
-
        <div className="content-container">
          <Routes>
            {/* Public Routes */}
            <Route path="/" element={<HomePage />} />
            <Route path="/restaurants" element={<RestaurantList />} />
            <Route path="/products" element={<ProductList />} />
-           <Route path="/restaurant/:slug" element={<RestaurantInfo />} />
+           <Route path="/restaurant/:slug" element={<RestaurantDetails />} />
            <Route path="/menu/:slug" element={<MenuSection />} />
            <Route path="/dish/:slug" element={<DishDetails />} />
            <Route path="/product/:slug" element={<ProductDetails />} />
