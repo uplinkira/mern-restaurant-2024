@@ -23,38 +23,109 @@ const paginate = (req, res, next) => {
 // Get all dishes with pagination
 const getAllDishes = async (req, res) => {
   const { skip, limit, page } = req.pagination;
+  console.log(`[Dishes] Fetching dishes with pagination - page: ${page}, limit: ${limit}, skip: ${skip}`);
 
   try {
+    // Get dishes with populated data
     const dishes = await Dish.find()
-      .populate('restaurantDetails', 'name slug') // Populate restaurant details
-      .populate('menuDetails', 'name slug') // Populate menu details
+      .populate('restaurantDetails', 'name slug cuisineType')
+      .populate('menuDetails', 'name slug')
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 });
 
     const total = await Dish.countDocuments();
-    successResponse(res, dishes, { total, page, limit });
+
+    // Log retrieval details
+    console.log(`[Dishes] Retrieved ${dishes.length} dishes out of ${total} total`);
+    
+    if (dishes.length > 0) {
+      console.log('[Dishes] Sample dish data:', {
+        name: dishes[0].name,
+        slug: dishes[0].slug,
+        price: dishes[0].price,
+        restaurantCount: dishes[0].restaurantDetails?.length || 0,
+        menuCount: dishes[0].menuDetails?.length || 0
+      });
+    }
+
+    // Format response to match frontend expectations
+    const response = {
+      success: true,
+      data: dishes.map(dish => ({
+        ...dish.toJSON(),
+        restaurants: dish.restaurantDetails,
+        menus: dish.menuDetails?.map(menu => menu.name) || []
+      })),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    };
+
+    console.log(`[Dishes] Sending response with ${response.data.length} dishes`);
+    return res.status(200).json(response);
+
   } catch (error) {
-    errorResponse(res, 'Error fetching dishes', error);
+    console.error('[Dishes] Error in getAllDishes:', error);
+    console.error('[Dishes] Stack trace:', error.stack);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching dishes',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 };
 
 // Get a single dish by slug
 const getDishBySlug = async (req, res) => {
   const { slug } = req.params;
+  console.log(`[Dishes] Fetching dish details for slug: ${slug}`);
 
   try {
     const dish = await Dish.findOne({ slug })
-      .populate('restaurantDetails', 'name slug') // Populate restaurant details
-      .populate('menuDetails', 'name slug'); // Populate menu details
+      .populate('restaurantDetails', 'name slug cuisineType')
+      .populate('menuDetails', 'name slug')
+      .populate('relatedDishes', 'name slug price');
 
     if (!dish) {
-      return res.status(404).json({ success: false, message: 'Dish not found' });
+      console.log(`[Dishes] No dish found with slug: ${slug}`);
+      return res.status(404).json({
+        success: false,
+        message: 'Dish not found'
+      });
     }
 
-    successResponse(res, dish);
+    console.log(`[Dishes] Found dish: ${dish.name}`);
+    console.log('[Dishes] Associated data:', {
+      restaurantCount: dish.restaurantDetails?.length || 0,
+      menuCount: dish.menuDetails?.length || 0,
+      relatedDishCount: dish.relatedDishes?.length || 0
+    });
+
+    // Format response to match frontend expectations
+    const response = {
+      success: true,
+      data: {
+        ...dish.toJSON(),
+        restaurants: dish.restaurantDetails,
+        menus: dish.menuDetails?.map(menu => menu.name) || [],
+        relatedDishes: dish.relatedDishes || []
+      }
+    };
+
+    return res.status(200).json(response);
+
   } catch (error) {
-    errorResponse(res, 'Error fetching dish by slug', error);
+    console.error(`[Dishes] Error fetching dish ${slug}:`, error);
+    console.error('[Dishes] Stack trace:', error.stack);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching dish details',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 };
 

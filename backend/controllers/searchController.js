@@ -1,10 +1,8 @@
-// backend/controllers/searchController.js
 const Restaurant = require('../models/Restaurant');
 const Menu = require('../models/Menu');
 const Dish = require('../models/Dish');
 const Product = require('../models/Product');
 
-// Helper functions
 const escapeRegex = (text) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 const isNumeric = (str) => !isNaN(str) && !isNaN(parseFloat(str));
 
@@ -20,7 +18,6 @@ const searchItems = async (req, res) => {
      });
    }
 
-   // Prepare search terms
    const searchTerms = query
      .trim()
      .toLowerCase()
@@ -31,12 +28,11 @@ const searchItems = async (req, res) => {
    const searchPatterns = searchTerms.map(term => new RegExp(term, 'i'));
    let results = [];
    
-   // Relevance weights
    const weights = {
      name: 3,
      description: 2,
-     primary: 2,    // For fields like cuisineType, category
-     secondary: 1   // For fields like ingredients, specialties
+     primary: 2,
+     secondary: 1
    };
 
    switch (filter) {
@@ -46,20 +42,13 @@ const searchItems = async (req, res) => {
            $or: [
              { name: pattern },
              { description: pattern },
-             { cuisineType: pattern },
-             { specialties: pattern }
+             { cuisineType: pattern }
            ]
          }))
        };
 
        results = await Restaurant.find(restaurantQuery)
-         .select(`
-           name description cuisineType specialties
-           isVRExperience maxCapacity slug email phone address
-           openingHours
-         `)
-         .populate('dishDetails', 'name slug')
-         .populate('menuDetails', 'name slug')
+         .select('name description cuisineType isVRExperience maxCapacity slug')
          .lean();
 
        results = results.map(restaurant => {
@@ -68,46 +57,13 @@ const searchItems = async (req, res) => {
            if (pattern.test(restaurant.name)) score += weights.name;
            if (pattern.test(restaurant.description)) score += weights.description;
            if (pattern.test(restaurant.cuisineType)) score += weights.primary;
-           restaurant.specialties?.forEach(specialty => {
-             if (pattern.test(specialty)) score += weights.secondary;
-           });
          });
+
          return {
            ...restaurant,
            relevanceScore: score,
            vrExperience: restaurant.isVRExperience ? 'VR Experience Available' : '',
            capacity: restaurant.maxCapacity ? `Capacity: ${restaurant.maxCapacity}` : ''
-         };
-       });
-       break;
-     }
-
-     case 'menu': {
-       const menuQuery = {
-         $or: searchPatterns.map(pattern => ({
-           $or: [
-             { name: pattern },
-             { description: pattern }
-           ]
-         }))
-       };
-
-       results = await Menu.find(menuQuery)
-         .select('name description restaurants slug')
-         .populate('dishes', 'name slug price')
-         .populate('restaurantDetails', 'name slug')
-         .lean();
-
-       results = results.map(menu => {
-         let score = 0;
-         searchPatterns.forEach(pattern => {
-           if (pattern.test(menu.name)) score += weights.name;
-           if (pattern.test(menu.description)) score += weights.description;
-         });
-         return {
-           ...menu,
-           relevanceScore: score,
-           dishCount: menu.dishes?.length || 0
          };
        });
        break;
@@ -119,20 +75,24 @@ const searchItems = async (req, res) => {
            $or: [
              { name: pattern },
              { description: pattern },
-             { ingredients: pattern },
-             { allergens: pattern }
+             // 修改数组字段的查询方式
+             { ingredients: { $in: [pattern] } },
+             { allergens: { $in: [pattern] } },
+             { menus: { $in: [pattern] } },
+             { restaurants: { $in: [pattern] } },
+             // 添加数字字段的查询
+             ...(isNumeric(pattern.source) ? [{ chenPiAge: Number(pattern.source) }] : [])
            ]
          }))
        };
 
+       console.log('Dish search query:', JSON.stringify(dishQuery, null, 2));
+
        results = await Dish.find(dishQuery)
-         .select(`
-           name description price ingredients allergens
-           menus chenPiAge isSignatureDish restaurants slug
-         `)
-         .populate('menuDetails', 'name slug')
-         .populate('restaurantDetails', 'name slug')
+         .select('name description price ingredients allergens chenPiAge isSignatureDish restaurants menus slug')
          .lean();
+
+       console.log('Raw dish results:', results);
 
        results = results.map(dish => {
          let score = 0;
@@ -142,15 +102,24 @@ const searchItems = async (req, res) => {
            dish.ingredients?.forEach(ing => {
              if (pattern.test(ing)) score += weights.secondary;
            });
-           if (isNumeric(pattern) && dish.chenPiAge === Number(pattern)) {
+           if (isNumeric(pattern.source) && dish.chenPiAge === Number(pattern.source)) {
              score += weights.primary;
            }
+           dish.allergens?.forEach(allergen => {
+             if (pattern.test(allergen)) score += weights.secondary;
+           });
+           dish.menus?.forEach(menu => {
+             if (pattern.test(menu)) score += weights.secondary;
+           });
+           dish.restaurants?.forEach(restaurant => {
+             if (pattern.test(restaurant)) score += weights.secondary;
+           });
          });
 
          return {
            ...dish,
            relevanceScore: score,
-           formattedPrice: `$${dish.price}`,
+           formattedPrice: `¥${dish.price.toFixed(2)}`,
            signature: dish.isSignatureDish ? 'Signature Dish' : '',
            chenPiAge: dish.chenPiAge ? `${dish.chenPiAge} Year Aged Chen Pi` : '',
            allergenAlert: dish.allergens?.length > 0 
@@ -174,12 +143,7 @@ const searchItems = async (req, res) => {
        };
 
        results = await Product.find(productQuery)
-         .select(`
-           name description price category ingredients
-           allergens isFeatured availableForDelivery caution slug
-         `)
-         .populate('dishDetails', 'name slug')
-         .populate('restaurantDetails', 'name slug')
+         .select('name description price category ingredients allergens isFeatured availableForDelivery slug')
          .lean();
 
        results = results.map(product => {
@@ -196,7 +160,7 @@ const searchItems = async (req, res) => {
          return {
            ...product,
            relevanceScore: score,
-           formattedPrice: `$${product.price}`,
+           formattedPrice: `¥${product.price.toFixed(2)}`,
            featured: product.isFeatured ? 'Featured Product' : '',
            availability: product.availableForDelivery ? 'Available for Delivery' : 'In-Store Only',
            allergenAlert: product.allergens?.length > 0 
@@ -214,7 +178,6 @@ const searchItems = async (req, res) => {
        });
    }
 
-   // Sort by relevance score and apply pagination
    results = results
      .filter(item => item.relevanceScore > 0)
      .sort((a, b) => b.relevanceScore - a.relevanceScore);
@@ -225,7 +188,6 @@ const searchItems = async (req, res) => {
 
    console.log(`Found ${total} results for ${filter}`);
 
-   // Send consistent response format
    return res.status(200).json({
      success: true,
      data: results,

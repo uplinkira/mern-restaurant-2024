@@ -10,26 +10,60 @@ const axiosInstance = axios.create({
   },
 });
 
-// Request interceptor
+// Request interceptor with logging
 axiosInstance.interceptors.request.use(
-  (config) => {
+  (request) => {
+    // Log request details
+    console.log('🚀 API Request:', {
+      url: request.url,
+      method: request.method,
+      params: request.params,
+      data: request.data,
+      headers: {
+        Authorization: request.headers.Authorization ? 'Bearer [REDACTED]' : 'None',
+        'Content-Type': request.headers['Content-Type']
+      }
+    });
+    
     const token = localStorage.getItem('token');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      request.headers.Authorization = `Bearer ${token}`;
     }
-    return config;
+    return request;
   },
   (error) => {
+    console.error('❌ Request Error:', error);
     return Promise.reject(error);
   }
 );
 
-// Response interceptor
+// Response interceptor with logging
 axiosInstance.interceptors.response.use(
   (response) => {
+    // Log successful response
+    console.log('✅ API Response:', {
+      url: response.config.url,
+      method: response.config.method,
+      status: response.status,
+      statusText: response.statusText,
+      data: response.data,
+      timestamp: new Date().toISOString()
+    });
     return response;
   },
   (error) => {
+    // Log error response
+    console.error('❌ API Error:', {
+      url: error.config?.url,
+      method: error.config?.method,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      message: error.message,
+      response: error.response?.data,
+      timestamp: new Date().toISOString()
+    });
+
+    // Handle unauthorized access
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
     }

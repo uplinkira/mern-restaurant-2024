@@ -11,6 +11,7 @@ import Footer from './common/Footer';
 import SearchBar from './features/search/SearchBar';
 import SearchResults from './features/search/SearchResults';
 
+import RestaurantPage from './pages/RestaurantPage';
 import RestaurantList from './features/restaurant/RestaurantList';
 import RestaurantDetails from './features/restaurant/RestaurantDetails';  
 import MenuSection from './features/restaurant/MenuSection';  
