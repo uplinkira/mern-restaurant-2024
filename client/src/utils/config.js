@@ -99,7 +99,7 @@ export const API_ENDPOINTS = {
   // Restaurants
   RESTAURANTS: '/api/restaurants',
   RESTAURANT_DETAILS: (slug) => `/api/restaurants/${slug}`,
-  RESTAURANT_MENU: (slug) => `/api/restaurants/${slug}/menu`,
+  RESTAURANT_MENU: (slug) => `/api/restaurants/${slug}/menus`, // Updated to point to /menus
 
   // Dishes
   DISHES: '/api/dishes',

@@ -1,176 +1,258 @@
 // backend/routes/dishes.js
 const express = require('express');
 const router = express.Router();
-const Dish = require('../models/Dish');
-const Restaurant = require('../models/Restaurant');
+const {
+  applyPagination,
+  getAllDishes,
+  getDishBySlug,
+  searchDishes,
+  createDish,
+  updateDish,
+  deleteDish
+} = require('../controllers/dishController');
 
-// **GET all dishes with pagination and search**
-router.get('/', async (req, res) => {
-  try {
-    const { page = 1, limit = 10, search = '' } = req.query;
-    const skip = (page - 1) * limit;
+// Validation middleware
+const validateDishInput = (req, res, next) => {
+  const { name, description, price, restaurants, menus } = req.body;
+  
+  const errors = [];
+  
+  if (!name?.trim()) errors.push('Name is required');
+  if (!description?.trim()) errors.push('Description is required');
+  if (!price || price < 0) errors.push('Valid price is required');
+  if (!Array.isArray(restaurants) || !restaurants.length) errors.push('At least one restaurant is required');
+  if (!Array.isArray(menus) || !menus.length) errors.push('At least one menu is required');
 
-    const query = search
-      ? { name: new RegExp(search, 'i') } // Case-insensitive search by dish name
-      : {};
-
-    const [dishes, total] = await Promise.all([
-      Dish.find(query)
-        .skip(skip)
-        .limit(Number(limit))
-        .sort({ createdAt: -1 }), // Sort by most recent dishes
-      Dish.countDocuments(query), // Count total for pagination
-    ]);
-
-    res.status(200).json({
-      dishes,
-      total,
-      page: Number(page),
-      limit: Number(limit),
+  if (errors.length) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors
     });
-  } catch (error) {
-    console.error('Error fetching dishes:', error);
-    res.status(500).json({ message: 'Failed to fetch dishes' });
   }
-});
 
-// **GET a dish by slug**
-router.get('/:slug', async (req, res) => {
-  const { slug } = req.params;
-  try {
-    const dish = await Dish.findOne({ slug }).populate('restaurant');
-    if (!dish) {
-      return res.status(404).json({ message: 'Dish not found' });
+  next();
+};
+
+// Routes
+router.get(
+  '/search',
+  applyPagination,
+  searchDishes
+);
+
+router.get(
+  '/',
+  applyPagination,
+  getAllDishes
+);
+
+router.get(
+  '/:slug',
+  getDishBySlug
+);
+
+router.get(
+  '/restaurant/:slug',
+  applyPagination,
+  async (req, res) => {
+    const { slug } = req.params;
+    const { skip, limit, page, sort } = req.pagination;
+    const { status = 'active' } = req.query;
+
+    try {
+      const [dishes, total] = await Promise.all([
+        Dish.find({ restaurants: slug, status })
+          .populate('restaurantDetails', 'name slug cuisineType')
+          .populate('menuDetails', 'name slug')
+          .skip(skip)
+          .limit(limit)
+          .sort(sort)
+          .lean(),
+        Dish.countDocuments({ restaurants: slug, status })
+      ]);
+
+      res.status(200).json({
+        success: true,
+        data: dishes.map(dish => ({
+          ...dish,
+          restaurants: dish.restaurantDetails,
+          menus: dish.menuDetails,
+          restaurantDetails: undefined,
+          menuDetails: undefined
+        })),
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+          restaurant: slug
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching restaurant dishes:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch restaurant dishes',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
     }
-    res.status(200).json(dish);
-  } catch (error) {
-    console.error('Error fetching dish by slug:', error);
-    res.status(500).json({ message: 'Failed to fetch dish' });
   }
-});
+);
 
-// **GET dishes by restaurant slug**
-router.get('/restaurant/:slug', async (req, res) => {
-  const { slug } = req.params;
-  try {
-    const restaurant = await Restaurant.findOne({ slug });
-    if (!restaurant) {
-      return res.status(404).json({ message: 'Restaurant not found' });
+router.get(
+  '/menu/:slug',
+  applyPagination,
+  async (req, res) => {
+    const { slug } = req.params;
+    const { skip, limit, page, sort } = req.pagination;
+    const { status = 'active' } = req.query;
+
+    try {
+      const [dishes, total] = await Promise.all([
+        Dish.find({ menus: slug, status })
+          .populate('restaurantDetails', 'name slug cuisineType')
+          .populate('menuDetails', 'name slug')
+          .skip(skip)
+          .limit(limit)
+          .sort(sort)
+          .lean(),
+        Dish.countDocuments({ menus: slug, status })
+      ]);
+
+      res.status(200).json({
+        success: true,
+        data: dishes.map(dish => ({
+          ...dish,
+          restaurants: dish.restaurantDetails,
+          menus: dish.menuDetails,
+          restaurantDetails: undefined,
+          menuDetails: undefined
+        })),
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+          menu: slug
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching menu dishes:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch menu dishes',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
     }
-
-    const dishes = await Dish.find({ restaurant: restaurant._id });
-    if (dishes.length === 0) {
-      return res.status(404).json({ message: 'No dishes found for this restaurant' });
-    }
-
-    res.status(200).json(dishes);
-  } catch (error) {
-    console.error('Error fetching dishes for restaurant:', error);
-    res.status(500).json({ message: 'Failed to fetch dishes for restaurant' });
   }
-});
+);
 
-// **Search dishes**
-router.get('/search', async (req, res) => {
-  try {
-    const { keyword = '', page = 1, limit = 10 } = req.query;
-    const skip = (page - 1) * limit;
+router.post(
+  '/',
+  validateDishInput,
+  createDish
+);
 
-    const query = keyword
-      ? { name: new RegExp(keyword, 'i') } // Case-insensitive search
-      : {};
+router.put(
+  '/:slug',
+  validateDishInput,
+  updateDish
+);
 
-    const [results, total] = await Promise.all([
-      Dish.find(query)
-        .skip(skip)
-        .limit(Number(limit))
-        .sort({ createdAt: -1 }),
-      Dish.countDocuments(query),
-    ]);
+router.delete(
+  '/:slug',
+  deleteDish
+);
 
-    res.status(200).json({
-      results,
-      total,
-      page: Number(page),
-      limit: Number(limit),
-    });
-  } catch (error) {
-    console.error('Error searching dishes:', error);
-    res.status(500).json({ message: 'Failed to search dishes' });
+// Specialized routes
+router.get(
+  '/signature/:restaurantSlug',
+  async (req, res) => {
+    const { restaurantSlug } = req.params;
+    const { status = 'active' } = req.query;
+
+    try {
+      const dishes = await Dish.find({
+        restaurants: restaurantSlug,
+        isSignatureDish: true,
+        status
+      })
+      .populate('restaurantDetails', 'name slug cuisineType')
+      .populate('menuDetails', 'name slug')
+      .lean();
+
+      res.status(200).json({
+        success: true,
+        data: dishes.map(dish => ({
+          ...dish,
+          restaurants: dish.restaurantDetails,
+          menus: dish.menuDetails,
+          restaurantDetails: undefined,
+          menuDetails: undefined
+        }))
+      });
+    } catch (error) {
+      console.error('Error fetching signature dishes:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch signature dishes',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
   }
-});
+);
 
-// **POST create a new dish**
-router.post('/', async (req, res) => {
-  const { name, description, price, restaurantSlug, slug } = req.body;
-  try {
-    const restaurant = await Restaurant.findOne({ slug: restaurantSlug });
-    if (!restaurant) {
-      return res.status(400).json({ message: 'Restaurant not found' });
+router.patch(
+  '/:slug/status',
+  async (req, res) => {
+    const { slug } = req.params;
+    const { status } = req.body;
+
+    if (!['active', 'inactive', 'seasonal'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status value'
+      });
     }
 
-    const dish = new Dish({
-      name,
-      description,
-      price,
-      restaurant: restaurant._id,
-      slug,
-    });
+    try {
+      const dish = await Dish.findOneAndUpdate(
+        { slug },
+        { status },
+        { new: true }
+      )
+      .populate('restaurantDetails', 'name slug')
+      .populate('menuDetails', 'name slug')
+      .lean();
 
-    await dish.save();
-    res.status(201).json({ message: 'Dish created successfully', dish });
-  } catch (error) {
-    console.error('Error creating dish:', error);
-    res.status(500).json({ message: 'Failed to create dish' });
-  }
-});
+      if (!dish) {
+        return res.status(404).json({
+          success: false,
+          message: 'Dish not found'
+        });
+      }
 
-// **PUT update a dish by slug**
-router.put('/:slug', async (req, res) => {
-  const { slug } = req.params;
-  const { name, description, price, restaurantSlug } = req.body;
-
-  try {
-    const restaurant = await Restaurant.findOne({ slug: restaurantSlug });
-    if (!restaurant) {
-      return res.status(400).json({ message: 'Restaurant not found' });
+      res.status(200).json({
+        success: true,
+        message: 'Status updated successfully',
+        data: {
+          ...dish,
+          restaurants: dish.restaurantDetails,
+          menus: dish.menuDetails,
+          restaurantDetails: undefined,
+          menuDetails: undefined
+        }
+      });
+    } catch (error) {
+      console.error('Error updating dish status:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update dish status',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
     }
-
-    const updatedDish = await Dish.findOneAndUpdate(
-      { slug },
-      {
-        name,
-        description,
-        price,
-        restaurant: restaurant._id,
-      },
-      { new: true }
-    );
-
-    if (!updatedDish) {
-      return res.status(404).json({ message: 'Dish not found' });
-    }
-
-    res.status(200).json({ message: 'Dish updated successfully', updatedDish });
-  } catch (error) {
-    console.error('Error updating dish:', error);
-    res.status(500).json({ message: 'Failed to update dish' });
   }
-});
-
-// **DELETE a dish by slug**
-router.delete('/:slug', async (req, res) => {
-  const { slug } = req.params;
-  try {
-    const dish = await Dish.findOneAndDelete({ slug });
-    if (!dish) {
-      return res.status(404).json({ message: 'Dish not found' });
-    }
-    res.status(200).json({ message: 'Dish deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting dish:', error);
-    res.status(500).json({ message: 'Failed to delete dish' });
-  }
-});
+);
 
 module.exports = router;

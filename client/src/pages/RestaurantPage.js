@@ -33,8 +33,12 @@ const RestaurantPage = () => {
 
   useEffect(() => {
     if (slug) {
-      dispatch(fetchRestaurantDetails(slug));
-      dispatch(fetchDishesByRestaurant(slug));
+      dispatch(fetchRestaurantDetails({ 
+        slug,
+        includeMenus: true, 
+        includeDishes: true 
+      }));
+      dispatch(fetchDishesByRestaurant({ restaurantSlug: slug }));
     }
   }, [dispatch, slug]);
 
@@ -55,14 +59,28 @@ const RestaurantPage = () => {
       <div className="error-container" role="alert">
         <h2>Unable to Load Restaurant</h2>
         <p className="error-message">
-          {restaurantError || dishError}
+          {restaurantError || dishError || 'An unexpected error occurred'}
         </p>
-        <button
-          onClick={() => navigate('/restaurants')}
-          className="back-button"
-        >
-          Return to Restaurants
-        </button>
+        <div className="error-actions">
+          <button
+            onClick={() => {
+              dispatch(fetchRestaurantDetails({ 
+                slug,
+                includeMenus: true, 
+                includeDishes: true 
+              }));
+            }}
+            className="retry-button"
+          >
+            Retry
+          </button>
+          <button
+            onClick={() => navigate('/restaurants')}
+            className="back-button"
+          >
+            Return to Restaurants
+          </button>
+        </div>
       </div>
     );
   }
@@ -85,10 +103,7 @@ const RestaurantPage = () => {
   return (
     <div className="restaurant-page">
       <div className="restaurant-page-content">
-        <RestaurantDetails
-          restaurant={currentRestaurant}
-          dishes={dishes}
-        />
+        <RestaurantDetails />
       </div>
     </div>
   );

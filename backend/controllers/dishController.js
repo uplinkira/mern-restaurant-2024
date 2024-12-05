@@ -1,240 +1,454 @@
 // backend/controllers/dishController.js
 const Dish = require('../models/Dish');
 const Restaurant = require('../models/Restaurant');
+const Menu = require('../models/Menu');
 
-// Utility function for standardized responses
+// Enhanced utility functions
 const successResponse = (res, data, meta = {}) => {
-  res.status(200).json({ success: true, data, meta });
+  res.status(200).json({
+    success: true,
+    data,
+    meta: {
+      timestamp: new Date().toISOString(),
+      ...meta
+    }
+  });
 };
 
 const errorResponse = (res, message, error, statusCode = 500) => {
-  console.error(message, error);
-  res.status(statusCode).json({ success: false, message, error: error?.message || 'An error occurred' });
+  console.error(`[Dishes] Error: ${message}`, error);
+  console.error('[Dishes] Stack:', error?.stack);
+  
+  res.status(statusCode).json({
+    success: false,
+    message,
+    error: process.env.NODE_ENV === 'development' 
+      ? error?.message || 'An error occurred'
+      : 'Internal server error',
+    timestamp: new Date().toISOString()
+  });
 };
 
-// Middleware for pagination
+// Enhanced pagination middleware with sorting
 const paginate = (req, res, next) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.min(parseInt(req.query.limit) || 10, 100);
-  req.pagination = { skip: (page - 1) * limit, limit, page };
+  const sortField = req.query.sortBy || 'createdAt';
+  const sortOrder = req.query.order === 'asc' ? 1 : -1;
+  
+  req.pagination = {
+    skip: (page - 1) * limit,
+    limit,
+    page,
+    sort: { [sortField]: sortOrder }
+  };
   next();
 };
 
-// Get all dishes with pagination
+// Get all dishes with enhanced filtering and pagination
 const getAllDishes = async (req, res) => {
-  const { skip, limit, page } = req.pagination;
-  console.log(`[Dishes] Fetching dishes with pagination - page: ${page}, limit: ${limit}, skip: ${skip}`);
+  const { skip, limit, page, sort } = req.pagination;
+  const {
+    restaurant,
+    menu,
+    minPrice,
+    maxPrice,
+    isSignature,
+    status = 'active'
+  } = req.query;
+
+  console.log(`[Dishes] Fetching dishes with filters:`, req.query);
 
   try {
-    // Get dishes with populated data
-    const dishes = await Dish.find()
-      .populate('restaurantDetails', 'name slug cuisineType')
-      .populate('menuDetails', 'name slug')
-      .skip(skip)
-      .limit(limit)
-      .sort({ createdAt: -1 });
+    // Build query
+    const query = { status };
+    if (restaurant) query.restaurants = restaurant;
+    if (menu) query.menus = menu;
+    if (minPrice) query.price = { $gte: parseFloat(minPrice) };
+    if (maxPrice) query.price = { ...query.price, $lte: parseFloat(maxPrice) };
+    if (typeof isSignature === 'boolean') query.isSignatureDish = isSignature;
 
-    const total = await Dish.countDocuments();
+    // Execute query with populated data
+    const [dishes, total] = await Promise.all([
+      Dish.find(query)
+        .populate('restaurantDetails', 'name slug cuisineType priceRange')
+        .populate('menuDetails', 'name slug category')
+        .select('-__v')
+        .skip(skip)
+        .limit(limit)
+        .sort(sort)
+        .lean(),
+      Dish.countDocuments(query)
+    ]);
 
-    // Log retrieval details
     console.log(`[Dishes] Retrieved ${dishes.length} dishes out of ${total} total`);
-    
-    if (dishes.length > 0) {
-      console.log('[Dishes] Sample dish data:', {
-        name: dishes[0].name,
-        slug: dishes[0].slug,
-        price: dishes[0].price,
-        restaurantCount: dishes[0].restaurantDetails?.length || 0,
-        menuCount: dishes[0].menuDetails?.length || 0
-      });
-    }
 
-    // Format response to match frontend expectations
-    const response = {
-      success: true,
-      data: dishes.map(dish => ({
-        ...dish.toJSON(),
-        restaurants: dish.restaurantDetails,
-        menus: dish.menuDetails?.map(menu => menu.name) || []
-      })),
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit)
+    // Format response
+    const formattedDishes = dishes.map(dish => ({
+      ...dish,
+      restaurants: dish.restaurantDetails,
+      menus: dish.menuDetails,
+      restaurantDetails: undefined,
+      menuDetails: undefined
+    }));
+
+    successResponse(res, formattedDishes, {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      filters: {
+        restaurant,
+        menu,
+        priceRange: minPrice || maxPrice ? { min: minPrice, max: maxPrice } : null,
+        isSignature
       }
-    };
-
-    console.log(`[Dishes] Sending response with ${response.data.length} dishes`);
-    return res.status(200).json(response);
+    });
 
   } catch (error) {
-    console.error('[Dishes] Error in getAllDishes:', error);
-    console.error('[Dishes] Stack trace:', error.stack);
-    return res.status(500).json({
-      success: false,
-      message: 'Error fetching dishes',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
+    errorResponse(res, 'Failed to fetch dishes', error);
   }
 };
 
-// Get a single dish by slug
+// Get dish by slug with enhanced related data
 const getDishBySlug = async (req, res) => {
   const { slug } = req.params;
-  console.log(`[Dishes] Fetching dish details for slug: ${slug}`);
+  const { includeRelated = true } = req.query;
+
+  console.log(`[Dishes] Fetching dish: ${slug}, includeRelated: ${includeRelated}`);
 
   try {
-    const dish = await Dish.findOne({ slug })
-      .populate('restaurantDetails', 'name slug cuisineType')
-      .populate('menuDetails', 'name slug')
-      .populate('relatedDishes', 'name slug price');
+    const query = Dish.findOne({ slug })
+      .populate('restaurantDetails', 'name slug cuisineType priceRange images')
+      .populate('menuDetails', 'name slug category');
+
+    if (includeRelated) {
+      query.populate({
+        path: 'restaurantDetails',
+        populate: {
+          path: 'dishes',
+          match: { 
+            slug: { $ne: slug },
+            status: 'active'
+          },
+          select: 'name slug price isSignatureDish images',
+          options: { limit: 4 }
+        }
+      });
+    }
+
+    const dish = await query.lean();
 
     if (!dish) {
-      console.log(`[Dishes] No dish found with slug: ${slug}`);
+      return res.status(404).json({
+        success: false,
+        message: 'Dish not found',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Format response
+    const formattedDish = {
+      ...dish,
+      restaurants: dish.restaurantDetails,
+      menus: dish.menuDetails,
+      relatedDishes: dish.restaurants?.reduce((acc, restaurant) => {
+        if (restaurant.dishes) {
+          acc.push(...restaurant.dishes);
+        }
+        return acc;
+      }, []),
+      restaurantDetails: undefined,
+      menuDetails: undefined
+    };
+
+    successResponse(res, formattedDish);
+
+  } catch (error) {
+    errorResponse(res, `Failed to fetch dish: ${slug}`, error);
+  }
+};
+
+// Enhanced search with filters
+const searchDishes = async (req, res) => {
+  const { skip, limit, page, sort } = req.pagination;
+  const {
+    q,
+    restaurant,
+    menu,
+    minPrice,
+    maxPrice,
+    isSignature,
+    status = 'active'
+  } = req.query;
+
+  try {
+    const query = { status };
+
+    // Text search if query provided
+    if (q?.trim()) {
+      query.$text = { $search: q.trim() };
+    }
+
+    // Apply filters
+    if (restaurant) query.restaurants = restaurant;
+    if (menu) query.menus = menu;
+    if (minPrice) query.price = { $gte: parseFloat(minPrice) };
+    if (maxPrice) query.price = { ...query.price, $lte: parseFloat(maxPrice) };
+    if (typeof isSignature === 'boolean') query.isSignatureDish = isSignature;
+
+    const [dishes, total] = await Promise.all([
+      Dish.find(query)
+        .populate('restaurantDetails', 'name slug')
+        .populate('menuDetails', 'name slug')
+        .skip(skip)
+        .limit(limit)
+        .sort(sort)
+        .lean(),
+      Dish.countDocuments(query)
+    ]);
+
+    // Format response
+    const formattedDishes = dishes.map(dish => ({
+      ...dish,
+      restaurants: dish.restaurantDetails,
+      menus: dish.menuDetails,
+      restaurantDetails: undefined,
+      menuDetails: undefined
+    }));
+
+    successResponse(res, formattedDishes, {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      searchTerm: q
+    });
+
+  } catch (error) {
+    errorResponse(res, 'Search failed', error);
+  }
+};
+
+// Create dish with enhanced validation
+const createDish = async (req, res) => {
+  const dishData = req.body;
+
+  console.log('[Dishes] Creating new dish:', dishData.name);
+
+  try {
+    // Validate references
+    const [restaurantDocs, menuDocs] = await Promise.all([
+      Restaurant.find({ 
+        slug: { $in: dishData.restaurants },
+        status: 'active'
+      }),
+      Menu.find({ 
+        slug: { $in: dishData.menus },
+        status: 'active'
+      })
+    ]);
+
+    if (restaurantDocs.length !== dishData.restaurants.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Some restaurants not found or inactive',
+        invalidRestaurants: dishData.restaurants.filter(
+          slug => !restaurantDocs.find(doc => doc.slug === slug)
+        )
+      });
+    }
+
+    if (menuDocs.length !== dishData.menus.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Some menus not found or inactive',
+        invalidMenus: dishData.menus.filter(
+          slug => !menuDocs.find(doc => doc.slug === slug)
+        )
+      });
+    }
+
+    // Create dish
+    const dish = new Dish(dishData);
+    await dish.save();
+
+    // Update restaurant and menu references
+    await Promise.all([
+      ...restaurantDocs.map(restaurant => restaurant.addDish(dish.slug)),
+      ...menuDocs.map(menu => menu.addDish(dish.slug))
+    ]);
+
+    // Fetch complete dish data
+    const completeDish = await Dish.findById(dish._id)
+      .populate('restaurantDetails', 'name slug')
+      .populate('menuDetails', 'name slug')
+      .lean();
+
+    successResponse(res, completeDish, { 
+      message: 'Dish created successfully'
+    });
+
+  } catch (error) {
+    if (error.name === 'ValidationError') {
+      return errorResponse(res, 'Validation failed', error, 400);
+    }
+    errorResponse(res, 'Failed to create dish', error);
+  }
+};
+
+// Update dish with enhanced validation and reference management
+const updateDish = async (req, res) => {
+  const { slug } = req.params;
+  const updates = req.body;
+
+  console.log(`[Dishes] Updating dish: ${slug}`);
+
+  try {
+    const dish = await Dish.findOne({ slug });
+    if (!dish) {
       return res.status(404).json({
         success: false,
         message: 'Dish not found'
       });
     }
 
-    console.log(`[Dishes] Found dish: ${dish.name}`);
-    console.log('[Dishes] Associated data:', {
-      restaurantCount: dish.restaurantDetails?.length || 0,
-      menuCount: dish.menuDetails?.length || 0,
-      relatedDishCount: dish.relatedDishes?.length || 0
-    });
+    // If updating references, validate them
+    if (updates.restaurants || updates.menus) {
+      const [restaurantDocs, menuDocs] = await Promise.all([
+        Restaurant.find({ 
+          slug: { $in: updates.restaurants || dish.restaurants },
+          status: 'active'
+        }),
+        Menu.find({ 
+          slug: { $in: updates.menus || dish.menus },
+          status: 'active'
+        })
+      ]);
 
-    // Format response to match frontend expectations
-    const response = {
-      success: true,
-      data: {
-        ...dish.toJSON(),
-        restaurants: dish.restaurantDetails,
-        menus: dish.menuDetails?.map(menu => menu.name) || [],
-        relatedDishes: dish.relatedDishes || []
+      // Validate restaurants
+      if (updates.restaurants && 
+          restaurantDocs.length !== updates.restaurants.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'Some restaurants not found or inactive',
+          invalidRestaurants: updates.restaurants.filter(
+            slug => !restaurantDocs.find(doc => doc.slug === slug)
+          )
+        });
       }
-    };
 
-    return res.status(200).json(response);
+      // Validate menus
+      if (updates.menus && menuDocs.length !== updates.menus.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'Some menus not found or inactive',
+          invalidMenus: updates.menus.filter(
+            slug => !menuDocs.find(doc => doc.slug === slug)
+          )
+        });
+      }
 
-  } catch (error) {
-    console.error(`[Dishes] Error fetching dish ${slug}:`, error);
-    console.error('[Dishes] Stack trace:', error.stack);
-    return res.status(500).json({
-      success: false,
-      message: 'Error fetching dish details',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
-  }
-};
+      // Handle reference updates
+      if (updates.restaurants) {
+        const removedRestaurants = dish.restaurants.filter(
+          slug => !updates.restaurants.includes(slug)
+        );
+        const addedRestaurants = updates.restaurants.filter(
+          slug => !dish.restaurants.includes(slug)
+        );
 
-// Search dishes by name or description
-const searchDishes = async (req, res) => {
-  const { q } = req.query;
-  const { skip, limit, page } = req.pagination;
+        await Promise.all([
+          ...removedRestaurants.map(slug => 
+            Restaurant.findOne({ slug }).then(r => r?.removeDish(dish.slug))
+          ),
+          ...addedRestaurants.map(slug =>
+            Restaurant.findOne({ slug }).then(r => r?.addDish(dish.slug))
+          )
+        ]);
+      }
 
-  try {
-    if (!q || q.trim() === '') {
-      return res.status(400).json({ success: false, message: 'Search query is required' });
+      if (updates.menus) {
+        const removedMenus = dish.menus.filter(
+          slug => !updates.menus.includes(slug)
+        );
+        const addedMenus = updates.menus.filter(
+          slug => !dish.menus.includes(slug)
+        );
+
+        await Promise.all([
+          ...removedMenus.map(slug => 
+            Menu.findOne({ slug }).then(m => m?.removeDish(dish.slug))
+          ),
+          ...addedMenus.map(slug =>
+            Menu.findOne({ slug }).then(m => m?.addDish(dish.slug))
+          )
+        ]);
+      }
     }
 
-    const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    const dishes = await Dish.find({ $or: [{ name: regex }, { description: regex }] })
+    // Update dish
+    Object.assign(dish, updates);
+    await dish.save();
+
+    // Fetch updated dish with populated data
+    const updatedDish = await Dish.findById(dish._id)
       .populate('restaurantDetails', 'name slug')
       .populate('menuDetails', 'name slug')
-      .skip(skip)
-      .limit(limit)
-      .sort({ createdAt: -1 });
+      .lean();
 
-    const total = await Dish.countDocuments({ $or: [{ name: regex }, { description: regex }] });
-
-    successResponse(res, dishes, { total, page, limit });
-  } catch (error) {
-    errorResponse(res, 'Error searching dishes', error);
-  }
-};
-
-// Create a new dish
-const createDish = async (req, res) => {
-  const { name, description, price, restaurants, menus, slug, ingredients, allergens, chenPiAge, isSignatureDish } = req.body;
-
-  try {
-    const restaurantDocs = await Restaurant.find({ slug: { $in: restaurants } });
-    if (restaurantDocs.length !== restaurants.length) {
-      return res.status(400).json({ success: false, message: 'Some restaurants not found' });
-    }
-
-    const dish = new Dish({
-      name,
-      description,
-      price,
-      restaurants: restaurantDocs.map(r => r.slug),
-      menus,
-      slug,
-      ingredients,
-      allergens,
-      chenPiAge,
-      isSignatureDish,
+    successResponse(res, updatedDish, {
+      message: 'Dish updated successfully'
     });
 
-    await dish.save();
-    successResponse(res, dish, { message: 'Dish created successfully' });
   } catch (error) {
-    errorResponse(res, 'Error creating dish', error);
+    if (error.name === 'ValidationError') {
+      return errorResponse(res, 'Validation failed', error, 400);
+    }
+    errorResponse(res, `Failed to update dish: ${slug}`, error);
   }
 };
 
-// Update a dish by slug
-const updateDish = async (req, res) => {
-  const { slug } = req.params;
-  const { name, description, price, restaurants, menus, ingredients, allergens, chenPiAge, isSignatureDish } = req.body;
-
-  try {
-    const restaurantDocs = await Restaurant.find({ slug: { $in: restaurants } });
-    if (restaurantDocs.length !== restaurants.length) {
-      return res.status(400).json({ success: false, message: 'Some restaurants not found' });
-    }
-
-    const updatedDish = await Dish.findOneAndUpdate(
-      { slug },
-      {
-        name,
-        description,
-        price,
-        restaurants: restaurantDocs.map(r => r.slug),
-        menus,
-        ingredients,
-        allergens,
-        chenPiAge,
-        isSignatureDish,
-      },
-      { new: true }
-    );
-
-    if (!updatedDish) {
-      return res.status(404).json({ success: false, message: 'Dish not found' });
-    }
-
-    successResponse(res, updatedDish, { message: 'Dish updated successfully' });
-  } catch (error) {
-    errorResponse(res, 'Error updating dish', error);
-  }
-};
-
-// Delete a dish by slug
+// Delete dish with reference cleanup
 const deleteDish = async (req, res) => {
   const { slug } = req.params;
+  const { hardDelete = false } = req.query;
+
+  console.log(`[Dishes] ${hardDelete ? 'Deleting' : 'Deactivating'} dish: ${slug}`);
 
   try {
-    const deletedDish = await Dish.findOneAndDelete({ slug });
-    if (!deletedDish) {
-      return res.status(404).json({ success: false, message: 'Dish not found' });
+    const dish = await Dish.findOne({ slug });
+    if (!dish) {
+      return res.status(404).json({
+        success: false,
+        message: 'Dish not found'
+      });
     }
 
-    successResponse(res, null, { message: 'Dish deleted successfully' });
+    if (hardDelete) {
+      // Clean up references
+      await Promise.all([
+        ...dish.restaurants.map(restaurantSlug =>
+          Restaurant.findOne({ slug: restaurantSlug }).then(r => r?.removeDish(slug))
+        ),
+        ...dish.menus.map(menuSlug =>
+          Menu.findOne({ slug: menuSlug }).then(m => m?.removeDish(slug))
+        )
+      ]);
+
+      await dish.deleteOne();
+    } else {
+      // Soft delete
+      dish.status = 'inactive';
+      await dish.save();
+    }
+
+    successResponse(res, null, {
+      message: `Dish ${hardDelete ? 'deleted' : 'deactivated'} successfully`
+    });
+
   } catch (error) {
-    errorResponse(res, 'Error deleting dish', error);
+    errorResponse(res, `Failed to ${hardDelete ? 'delete' : 'deactivate'} dish: ${slug}`, error);
   }
 };
 
@@ -245,5 +459,5 @@ module.exports = {
   searchDishes,
   createDish,
   updateDish,
-  deleteDish,
+  deleteDish
 };

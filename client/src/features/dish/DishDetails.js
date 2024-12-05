@@ -1,9 +1,15 @@
 // client/src/features/dish/DishDetails.js
-
 import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, Link } from 'react-router-dom';
-import { fetchDishDetails, selectCurrentDish, selectDishStatus, selectDishError } from '../../redux/slices/dishSlice';
+import { 
+  fetchDishDetails, 
+  selectCurrentDish, 
+  selectDishStatus, 
+  selectDishError,
+  selectRelatedDishes,
+  clearCurrentDish 
+} from '../../redux/slices/dishSlice';
 import '../../App.css';
 
 const DishDetails = () => {
@@ -13,12 +19,27 @@ const DishDetails = () => {
   const dish = useSelector(selectCurrentDish);
   const status = useSelector(selectDishStatus);
   const error = useSelector(selectDishError);
+  const relatedDishes = useSelector(selectRelatedDishes);
 
   useEffect(() => {
     if (slug) {
-      dispatch(fetchDishDetails(slug));
+      dispatch(fetchDishDetails({ slug, includeRelated: true }));
     }
+    
+    return () => {
+      dispatch(clearCurrentDish());
+    };
   }, [dispatch, slug]);
+
+  const getRestaurantName = (restaurant) => {
+    if (typeof restaurant === 'string') return restaurant;
+    return restaurant?.name || 'Unknown Restaurant';
+  };
+
+  const getMenuName = (menu) => {
+    if (typeof menu === 'string') return menu;
+    return menu?.name || 'Unnamed Menu';
+  };
 
   if (status === 'loading') {
     return <div className="loading">Loading dish details...</div>;
@@ -28,7 +49,7 @@ const DishDetails = () => {
     return <div className="error">Error: {error}</div>;
   }
 
-  if (!dish || Object.keys(dish).length === 0) {
+  if (!dish) {
     return <div className="error">Dish not found</div>;
   }
 
@@ -36,12 +57,14 @@ const DishDetails = () => {
     <div className="dish-details">
       {/* Main Info Section */}
       <div className="dish-header card">
-        <h1>{dish.name}</h1>
-        {dish.isSignatureDish && (
-          <span className="signature-badge">Signature Dish</span>
-        )}
-        <p className="description">{dish.description}</p>
-        <div className="price-info">
+        <div className="dish-title">
+          <h1>{dish.name}</h1>
+          {dish.isSignatureDish && (
+            <span className="signature-badge">Signature Dish</span>
+          )}
+        </div>
+
+        <div className="dish-price-info">
           <span className="price">¥{dish.price.toFixed(2)}</span>
           {dish.chenPiAge && (
             <span className="chen-pi-age">
@@ -49,12 +72,14 @@ const DishDetails = () => {
             </span>
           )}
         </div>
+        
+        <p className="dish-description">{dish.description}</p>
       </div>
 
       {/* Details Grid */}
       <div className="details-grid">
         {/* Ingredients Section */}
-        {dish.ingredients && dish.ingredients.length > 0 && (
+        {dish.ingredients?.length > 0 && (
           <div className="ingredients-section card">
             <h2>Ingredients</h2>
             <div className="ingredients-list">
@@ -68,7 +93,7 @@ const DishDetails = () => {
         )}
 
         {/* Allergens Section */}
-        {dish.allergens && dish.allergens.length > 0 && (
+        {dish.allergens?.length > 0 && (
           <div className="allergens-section card">
             <h2>Allergen Information</h2>
             <div className="allergens-list">
@@ -83,59 +108,74 @@ const DishDetails = () => {
       </div>
 
       {/* Restaurant & Menu Context */}
-      {(dish.restaurants && dish.restaurants.length > 0) || (dish.menus && dish.menus.length > 0) ? (
+      {(dish.restaurants?.length > 0 || dish.menus?.length > 0) && (
         <div className="context-section card">
-          {dish.restaurants && dish.restaurants.length > 0 && (
-            <>
+          {/* Restaurants Section with safe object handling */}
+          {dish.restaurants?.length > 0 && (
+            <div className="restaurants-section">
               <h2>Available At</h2>
               <div className="restaurant-list">
-                {dish.restaurants.map((restaurant) => (
+                {dish.restaurants.map((restaurant, index) => (
                   <Link
-                    key={restaurant.slug}
-                    to={`/restaurant/${restaurant.slug}`}
+                    key={restaurant.slug || index}
+                    to={`/restaurant/${restaurant.slug || ''}`}
                     className="restaurant-link"
                   >
                     <div className="restaurant-card">
-                      <h3>{restaurant.name}</h3>
-                      <span className="cuisine-type">{restaurant.cuisineType}</span>
+                      <h3>{getRestaurantName(restaurant)}</h3>
+                      {restaurant.cuisineType && (
+                        <span className="cuisine-type">{restaurant.cuisineType}</span>
+                      )}
                     </div>
                   </Link>
                 ))}
               </div>
-            </>
+            </div>
           )}
-          {dish.menus && dish.menus.length > 0 && (
+
+          {/* Menus Section with safe object handling */}
+          {dish.menus?.length > 0 && (
             <div className="menu-context">
-              <h3>Featured In Menus</h3>
+              <h2>Featured In Menus</h2>
               <div className="menu-list">
                 {dish.menus.map((menu, index) => (
-                  <span key={index} className="menu-tag">
-                    {menu}
+                  <span key={menu.slug || index} className="menu-tag">
+                    {getMenuName(menu)}
                   </span>
                 ))}
               </div>
             </div>
           )}
         </div>
-      ) : null}
+      )}
 
       {/* Related Dishes */}
-      {dish.relatedDishes && dish.relatedDishes.length > 0 && (
+      {relatedDishes?.length > 0 && (
         <div className="related-section card">
           <h2>You Might Also Like</h2>
           <div className="related-dishes">
-            {dish.relatedDishes.map((relatedDish) => (
-              <Link
-                key={relatedDish.slug}
-                to={`/dish/${relatedDish.slug}`}
-                className="related-dish-card"
-              >
-                <h4>{relatedDish.name}</h4>
-                <span className="price">
-                  ¥{relatedDish.price.toFixed(2)}
-                </span>
-              </Link>
-            ))}
+            {relatedDishes.map((relatedDish) => {
+              // Skip rendering if essential data is missing
+              if (!relatedDish?.name || !relatedDish?.slug) return null;
+              
+              return (
+                <Link
+                  key={relatedDish.slug}
+                  to={`/dish/${relatedDish.slug}`}
+                  className="related-dish-card"
+                >
+                  <div className="related-dish-info">
+                    <h4>{relatedDish.name}</h4>
+                    {relatedDish.isSignatureDish && (
+                      <span className="signature-badge-small">Signature</span>
+                    )}
+                  </div>
+                  <span className="price">
+                    ¥{(relatedDish.price || 0).toFixed(2)}
+                  </span>
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}

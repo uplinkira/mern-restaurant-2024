@@ -1,4 +1,4 @@
-// src/App.js
+// client/src/App.js
 import React from 'react';
 import { Route, Routes, Link, Navigate, useLocation } from 'react-router-dom';
 import useAuth from './hooks/useAuth';
@@ -120,9 +120,9 @@ function App() {
          <Routes>
            {/* Public Routes */}
            <Route path="/" element={<HomePage />} />
-           <Route path="/restaurants" element={<RestaurantList />} />
+           <Route path="/restaurants" element={<RestaurantList showFilters={true} />} />
            <Route path="/products" element={<ProductList />} />
-           <Route path="/restaurant/:slug" element={<RestaurantDetails />} />
+           <Route path="/restaurant/:slug" element={<RestaurantPage />} />
            <Route path="/menu/:slug" element={<MenuSection />} />
            <Route path="/dish/:slug" element={<DishDetails />} />
            <Route path="/product/:slug" element={<ProductDetails />} />

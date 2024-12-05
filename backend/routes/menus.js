@@ -1,148 +1,180 @@
 // backend/routes/menus.js
 const express = require('express');
 const router = express.Router();
-const Menu = require('../models/Menu');
-const Restaurant = require('../models/Restaurant');
+const {
+  applyPagination,
+  getAllMenus,
+  getMenuBySlug,
+  createMenu,
+  updateMenu,
+  deleteMenu,
+  getMenusByRestaurant
+} = require('../controllers/menuController');
 
-// **GET all menus with pagination and search functionality**
-router.get('/', async (req, res) => {
+// Validation middleware for menu input
+const validateMenuInput = (req, res, next) => {
+  const { name, description, restaurants, category } = req.body;
+  
+  const errors = [];
+  
+  if (!name?.trim()) errors.push('Name is required');
+  if (!description?.trim()) errors.push('Description is required');
+  if (!Array.isArray(restaurants) || !restaurants.length) {
+    errors.push('At least one restaurant is required');
+  }
+  if (!category) errors.push('Category is required');
+
+  if (errors.length) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors
+    });
+  }
+
+  next();
+};
+
+// Apply pagination to all routes that need it
+router.use([
+  '/',
+  '/search',
+  '/restaurant/:slug'
+], applyPagination);
+
+// Core Routes
+router.get('/', getAllMenus);
+
+router.get('/search', async (req, res) => {
+  req.query.search = req.query.q;
+  return getAllMenus(req, res);
+});
+
+router.get('/:slug', getMenuBySlug);
+
+router.post('/', 
+  validateMenuInput,
+  createMenu
+);
+
+router.put('/:slug',
+  validateMenuInput,
+  updateMenu
+);
+
+router.delete('/:slug', deleteMenu);
+
+// Specialized Routes
+router.get('/restaurant/:slug', getMenusByRestaurant);
+
+// Additional Menu Operations
+router.patch('/:slug/status', async (req, res) => {
+  const { slug } = req.params;
+  const { status } = req.body;
+
+  if (!['active', 'inactive', 'seasonal'].includes(status)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid status value'
+    });
+  }
+
   try {
-    const { page = 1, limit = 10, search = '' } = req.query;
-    const skip = (page - 1) * limit;
+    const menu = await Menu.findOneAndUpdate(
+      { slug },
+      { status },
+      { 
+        new: true,
+        runValidators: true 
+      }
+    )
+    .populate('restaurants', 'name slug cuisineType')
+    .populate({
+      path: 'dishes',
+      match: { status: 'active' },
+      select: 'name slug price isSignatureDish'
+    });
 
-    const query = search
-      ? {
-          $or: [
-            { name: new RegExp(search, 'i') },
-            { description: new RegExp(search, 'i') },
-          ],
-        }
-      : {};
-
-    // Fetch menus with pagination and optional search
-    const menus = await Menu.find(query)
-      .skip(skip)
-      .limit(Number(limit))
-      .sort({ createdAt: -1 }) // Sort by most recent menus
-      .populate('restaurants'); // Populate related restaurant data
-
-    // Get the total count of menus to calculate pagination info
-    const total = await Menu.countDocuments(query);
+    if (!menu) {
+      return res.status(404).json({
+        success: false,
+        message: 'Menu not found'
+      });
+    }
 
     res.status(200).json({
-      menus,
-      total,
-      page: Number(page),
-      limit: Number(limit),
+      success: true,
+      message: 'Status updated successfully',
+      data: menu
     });
   } catch (error) {
-    console.error('Error fetching menus:', error);
-    res.status(500).json({ message: 'Failed to fetch menus' });
-  }
-});
-
-// **GET a single menu by slug**
-router.get('/:slug', async (req, res) => {
-  const { slug } = req.params;
-  try {
-    const menu = await Menu.findOne({ slug }).populate('restaurants');
-    if (!menu) {
-      return res.status(404).json({ message: 'Menu not found' });
-    }
-    res.status(200).json(menu);
-  } catch (error) {
-    console.error('Error fetching menu by slug:', error);
-    res.status(500).json({ message: 'Failed to fetch menu' });
-  }
-});
-
-// **POST create a new menu**
-router.post('/', async (req, res) => {
-  const { name, description, restaurants, slug } = req.body;
-  try {
-    const restaurantSlugs = restaurants || [];
-    const restaurantDocs = await Restaurant.find({ slug: { $in: restaurantSlugs } });
-
-    if (restaurantDocs.length !== restaurantSlugs.length) {
-      return res.status(400).json({ message: 'Some restaurants not found' });
-    }
-
-    const menu = new Menu({
-      name,
-      description,
-      restaurants: restaurantDocs.map((restaurant) => restaurant.slug),
-      slug,
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update menu status',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
-
-    await menu.save();
-    res.status(201).json({ message: 'Menu created successfully', menu });
-  } catch (error) {
-    console.error('Error creating menu:', error);
-    res.status(500).json({ message: 'Failed to create menu' });
   }
 });
 
-// **PUT update a menu by slug**
-router.put('/:slug', async (req, res) => {
+router.patch('/:slug/dishes', async (req, res) => {
   const { slug } = req.params;
-  const { name, description, restaurants } = req.body;
+  const { add, remove } = req.body;
+
   try {
-    const restaurantSlugs = restaurants || [];
-    const restaurantDocs = await Restaurant.find({ slug: { $in: restaurantSlugs } });
-
-    if (restaurantDocs.length !== restaurantSlugs.length) {
-      return res.status(400).json({ message: 'Some restaurants not found' });
-    }
-
-    const updatedMenu = await Menu.findOneAndUpdate(
-      { slug },
-      {
-        name,
-        description,
-        restaurants: restaurantDocs.map((restaurant) => restaurant.slug),
-      },
-      { new: true }
-    ).populate('restaurants');
-
-    if (!updatedMenu) {
-      return res.status(404).json({ message: 'Menu not found' });
-    }
-
-    res.status(200).json({ message: 'Menu updated successfully', updatedMenu });
-  } catch (error) {
-    console.error('Error updating menu:', error);
-    res.status(500).json({ message: 'Failed to update menu' });
-  }
-});
-
-// **DELETE a menu by slug**
-router.delete('/:slug', async (req, res) => {
-  const { slug } = req.params;
-  try {
-    const menu = await Menu.findOneAndDelete({ slug });
+    const menu = await Menu.findOne({ slug });
     if (!menu) {
-      return res.status(404).json({ message: 'Menu not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Menu not found'
+      });
     }
-    res.status(200).json({ message: 'Menu deleted successfully' });
+
+    if (Array.isArray(add) && add.length) {
+      await Promise.all(add.map(dishSlug => menu.addDish(dishSlug)));
+    }
+
+    if (Array.isArray(remove) && remove.length) {
+      await Promise.all(remove.map(dishSlug => menu.removeDish(dishSlug)));
+    }
+
+    const updatedMenu = await Menu.findOne({ slug })
+      .populate('restaurants', 'name slug cuisineType')
+      .populate({
+        path: 'dishes',
+        match: { status: 'active' },
+        select: 'name slug price isSignatureDish'
+      });
+
+    res.status(200).json({
+      success: true,
+      message: 'Menu dishes updated successfully',
+      data: updatedMenu
+    });
   } catch (error) {
-    console.error('Error deleting menu:', error);
-    res.status(500).json({ message: 'Failed to delete menu' });
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update menu dishes',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 });
 
-// **GET menus by restaurant slug**
-router.get('/restaurant/:slug', async (req, res) => {
-  const { slug } = req.params;
-  try {
-    const menus = await Menu.find({ restaurants: slug }).populate('restaurants');
-    if (!menus.length) {
-      return res.status(404).json({ message: 'No menus found for this restaurant' });
-    }
-    res.status(200).json(menus);
-  } catch (error) {
-    console.error('Error fetching menus for restaurant:', error);
-    res.status(500).json({ message: 'Failed to fetch menus for restaurant' });
-  }
+// Category-specific routes
+router.get('/category/:category', applyPagination, async (req, res) => {
+  req.query.category = req.params.category;
+  return getAllMenus(req, res);
+});
+
+// VR-specific routes
+router.get('/vr-experience', applyPagination, async (req, res) => {
+  req.query.isVREnabled = true;
+  return getAllMenus(req, res);
+});
+
+// Seasonal menus
+router.get('/seasonal', applyPagination, async (req, res) => {
+  req.query.type = 'seasonal';
+  return getAllMenus(req, res);
 });
 
 module.exports = router;

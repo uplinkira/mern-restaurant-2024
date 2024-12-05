@@ -84,6 +84,7 @@ client/src
 │   │   │   ├── authSlice.js
 │   │   │   ├── cartSlice.js
 │   │   │   ├── dishSlice.js
+│   │   │   ├── menuSlice.js
 │   │   │   ├── orderSlice.js
 │   │   │   ├── productSlice.js
 │   │   │   ├── restaurantSlice.js
