@@ -1,8 +1,16 @@
-// client/src/redux/slices/menuSlice.js
+// 
 import { createSlice, createAsyncThunk, createSelector } from '@reduxjs/toolkit';
 import axiosInstance, { API_ENDPOINTS } from '../../utils/config';
 
-// Async Thunks
+// Cache management
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+const isCacheValid = (timestamp) => {
+  if (!timestamp) return false;
+  return Date.now() - new Date(timestamp).getTime() < CACHE_DURATION;
+};
+
+// Optimized Async Thunks with cache handling
 export const fetchMenus = createAsyncThunk(
   'menus/fetchMenus',
   async ({ 
@@ -13,9 +21,20 @@ export const fetchMenus = createAsyncThunk(
     category,
     type,
     status = 'active',
-    restaurantSlug
-  } = {}, { rejectWithValue }) => {
+    restaurantSlug,
+    forceFetch = false
+  } = {}, { getState, rejectWithValue }) => {
     try {
+      const state = getState();
+      const { lastFetch, filters } = state.menus;
+      
+      // Check cache validity if not forced fetch
+      if (!forceFetch && 
+          isCacheValid(lastFetch) && 
+          restaurantSlug === filters.restaurant) {
+        return null; // Use cached data
+      }
+
       const response = await axiosInstance.get(
         restaurantSlug ? 
           API_ENDPOINTS.RESTAURANT_MENU(restaurantSlug) : 
@@ -32,9 +51,26 @@ export const fetchMenus = createAsyncThunk(
           }
         }
       );
-      return response.data;
+
+      // Normalize the response data
+      const normalized = {
+        data: response.data.data,
+        meta: {
+          page: response.data.meta?.page || 1,
+          totalPages: response.data.meta?.totalPages || 1,
+          limit: response.data.meta?.limit || limit,
+          total: response.data.meta?.total || response.data.data.length
+        }
+      };
+
+      return normalized;
     } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
+      console.error('Menu fetch error:', error);
+      return rejectWithValue({
+        message: error.response?.data?.message || error.message,
+        statusCode: error.response?.status,
+        timestamp: new Date().toISOString()
+      });
     }
   }
 );
@@ -46,58 +82,45 @@ export const fetchMenuDetails = createAsyncThunk(
       const response = await axiosInstance.get(API_ENDPOINTS.MENU(slug), {
         params: { includeDishes }
       });
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
-    }
-  }
-);
 
-export const searchMenus = createAsyncThunk(
-  'menus/searchMenus',
-  async ({ 
-    q, 
-    category,
-    type,
-    restaurant,
-    status = 'active',
-    page = 1,
-    limit = 10
-  }, { rejectWithValue }) => {
-    try {
-      const response = await axiosInstance.get(API_ENDPOINTS.SEARCH_MENUS, {
-        params: {
-          q,
-          category,
-          type,
-          restaurant,
-          status,
-          page,
-          limit
-        }
+      return {
+        data: response.data.data,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Menu details fetch error:', error);
+      return rejectWithValue({
+        message: error.response?.data?.message || error.message,
+        statusCode: error.response?.status,
+        timestamp: new Date().toISOString()
       });
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
     }
   }
 );
 
+// Normalized initial state
 const initialState = {
-  list: [],
-  currentMenu: null,
-  vrMenus: [],
-  seasonalMenus: [],
+  entities: {}, // Normalized menu data
+  ids: [], // Menu IDs for order preservation
+  currentMenuId: null,
+  categoryMenus: {}, // Menus grouped by category
+  restaurantMenus: {}, // Menus grouped by restaurant
   pagination: {
     currentPage: 1,
     totalPages: 1,
     itemsPerPage: 10,
     totalItems: 0
   },
-  listStatus: 'idle',
-  detailStatus: 'idle',
-  searchStatus: 'idle',
-  error: null,
+  status: {
+    list: 'idle',
+    detail: 'idle',
+    search: 'idle'
+  },
+  error: {
+    list: null,
+    detail: null,
+    search: null
+  },
   filters: {
     category: null,
     type: null,
@@ -106,7 +129,10 @@ const initialState = {
     sortBy: 'order',
     order: 'asc'
   },
-  lastFetch: null
+  cache: {
+    timestamp: null,
+    lastRestaurant: null
+  }
 };
 
 const menuSlice = createSlice({
@@ -114,14 +140,16 @@ const menuSlice = createSlice({
   initialState,
   reducers: {
     clearCurrentMenu: (state) => {
-      state.currentMenu = null;
-      state.detailStatus = 'idle';
-      state.error = null;
+      state.currentMenuId = null;
+      state.status.detail = 'idle';
+      state.error.detail = null;
     },
     clearMenuList: (state) => {
-      state.list = [];
-      state.listStatus = 'idle';
-      state.error = null;
+      state.entities = {};
+      state.ids = [];
+      state.status.list = 'idle';
+      state.error.list = null;
+      state.cache.timestamp = null;
     },
     setFilters: (state, action) => {
       state.filters = { ...state.filters, ...action.payload };
@@ -129,18 +157,13 @@ const menuSlice = createSlice({
     clearFilters: (state) => {
       state.filters = initialState.filters;
     },
-    setPagination: (state, action) => {
-      state.pagination = { ...state.pagination, ...action.payload };
-    },
-    setSorting: (state, action) => {
-      const { sortBy, order } = action.payload;
-      state.filters.sortBy = sortBy;
-      state.filters.order = order;
+    invalidateCache: (state) => {
+      state.cache.timestamp = null;
     },
     updateMenuDishes: (state, action) => {
       const { menuSlug, dishes } = action.payload;
-      if (state.currentMenu?.slug === menuSlug) {
-        state.currentMenu.dishes = dishes;
+      if (state.entities[menuSlug]) {
+        state.entities[menuSlug].dishes = dishes;
       }
     }
   },
@@ -148,138 +171,125 @@ const menuSlice = createSlice({
     builder
       // Handle fetchMenus
       .addCase(fetchMenus.pending, (state) => {
-        state.listStatus = 'loading';
-        state.error = null;
+        state.status.list = 'loading';
+        state.error.list = null;
       })
       .addCase(fetchMenus.fulfilled, (state, action) => {
-        state.listStatus = 'succeeded';
+        if (!action.payload) {
+          // Using cached data
+          state.status.list = 'succeeded';
+          return;
+        }
+
+        state.status.list = 'succeeded';
         
-        // 检查返回的数据结构
-        if (Array.isArray(action.payload)) {
-          // 如果直接返回数组
-          state.list = action.payload;
-        } else if (action.payload.data) {
-          // 如果是包装在data字段中
-          state.list = action.payload.data;
-        }
+        // Normalize data
+        const { data, meta } = action.payload;
+        state.entities = {};
+        state.ids = [];
+        state.categoryMenus = {};
+        
+        data.forEach(menu => {
+          state.entities[menu.slug] = menu;
+          state.ids.push(menu.slug);
+          
+          // Group by category
+          if (!state.categoryMenus[menu.category]) {
+            state.categoryMenus[menu.category] = [];
+          }
+          state.categoryMenus[menu.category].push(menu.slug);
 
-        // 安全地更新分页信息
-        if (action.payload.meta) {
-          state.pagination = {
-            currentPage: action.payload.meta.page || 1,
-            totalPages: action.payload.meta.totalPages || 1,
-            itemsPerPage: action.payload.meta.limit || 10,
-            totalItems: action.payload.meta.total || 0
-          };
-        }
+          // Group by restaurant
+          menu.restaurants.forEach(restaurantSlug => {
+            if (!state.restaurantMenus[restaurantSlug]) {
+              state.restaurantMenus[restaurantSlug] = [];
+            }
+            if (!state.restaurantMenus[restaurantSlug].includes(menu.slug)) {
+              state.restaurantMenus[restaurantSlug].push(menu.slug);
+            }
+          });
+        });
 
-        state.lastFetch = new Date().toISOString();
-        state.error = null;
-
-        // 安全地过滤特殊菜单
-        state.vrMenus = state.list.filter(menu => menu.isVREnabled);
-        state.seasonalMenus = state.list.filter(menu => menu.type === 'seasonal');
+        state.pagination = meta;
+        state.cache.timestamp = new Date().toISOString();
+        state.cache.lastRestaurant = action.meta.arg.restaurantSlug;
       })
       .addCase(fetchMenus.rejected, (state, action) => {
-        state.listStatus = 'failed';
-        state.error = action.payload?.message || 'Failed to fetch menus';
+        state.status.list = 'failed';
+        state.error.list = action.payload;
       })
 
       // Handle fetchMenuDetails
       .addCase(fetchMenuDetails.pending, (state) => {
-        state.detailStatus = 'loading';
-        state.error = null;
+        state.status.detail = 'loading';
+        state.error.detail = null;
       })
       .addCase(fetchMenuDetails.fulfilled, (state, action) => {
-        state.detailStatus = 'succeeded';
-        state.currentMenu = action.payload.data;
-        state.error = null;
+        const { data } = action.payload;
+        state.status.detail = 'succeeded';
+        state.entities[data.slug] = data;
+        state.currentMenuId = data.slug;
+        if (!state.ids.includes(data.slug)) {
+          state.ids.push(data.slug);
+        }
       })
       .addCase(fetchMenuDetails.rejected, (state, action) => {
-        state.detailStatus = 'failed';
-        state.error = action.payload?.message || 'Failed to fetch menu details';
-      })
-
-      // Handle searchMenus
-      .addCase(searchMenus.pending, (state) => {
-        state.searchStatus = 'loading';
-        state.error = null;
-      })
-      .addCase(searchMenus.fulfilled, (state, action) => {
-        state.searchStatus = 'succeeded';
-        state.list = action.payload.data;
-        state.pagination = {
-          currentPage: action.payload.meta.page,
-          totalPages: action.payload.meta.totalPages,
-          itemsPerPage: action.payload.meta.limit,
-          totalItems: action.payload.meta.total
-        };
-      })
-      .addCase(searchMenus.rejected, (state, action) => {
-        state.searchStatus = 'failed';
-        state.error = action.payload?.message || 'Search failed';
+        state.status.detail = 'failed';
+        state.error.detail = action.payload;
       });
   }
 });
 
-// Actions
 export const {
   clearCurrentMenu,
   clearMenuList,
   setFilters,
   clearFilters,
-  setPagination,
-  setSorting,
+  invalidateCache,
   updateMenuDishes
 } = menuSlice.actions;
 
-// Base Selectors
-export const selectAllMenus = (state) => state.menus.list;
-export const selectCurrentMenu = (state) => state.menus.currentMenu;
-export const selectMenuListStatus = (state) => state.menus.listStatus;
-export const selectMenuDetailStatus = (state) => state.menus.detailStatus;
-export const selectMenuSearchStatus = (state) => state.menus.searchStatus;
-export const selectMenuError = (state) => state.menus.error;
-export const selectMenuFilters = (state) => state.menus.filters;
-export const selectMenuPagination = (state) => state.menus.pagination;
-export const selectLastFetch = (state) => state.menus.lastFetch;
+// Optimized selectors with memoization
+export const selectMenuEntities = state => state.menus.entities;
+export const selectMenuIds = state => state.menus.ids;
 
-// Enhanced Selectors
-export const selectVRMenus = (state) => state.menus.vrMenus;
-export const selectSeasonalMenus = (state) => state.menus.seasonalMenus;
+export const selectAllMenus = createSelector(
+  [selectMenuEntities, selectMenuIds],
+  (entities, ids) => ids.map(id => entities[id])
+);
 
-export const selectMenusByCategory = (category) => (state) =>
-  state.menus.list.filter(menu => menu.category === category);
+export const selectCurrentMenu = createSelector(
+  [selectMenuEntities, state => state.menus.currentMenuId],
+  (entities, currentId) => currentId ? entities[currentId] : null
+);
 
-export const selectMenusByRestaurant = (restaurantSlug) => (state) =>
-  state.menus.list.filter(menu => menu.restaurants.includes(restaurantSlug));
+export const selectMenusByCategory = category => createSelector(
+  [selectMenuEntities, state => state.menus.categoryMenus[category]],
+  (entities, menuIds) => menuIds?.map(id => entities[id]) || []
+);
 
+export const selectMenusByRestaurant = restaurantSlug => createSelector(
+  [selectMenuEntities, state => state.menus.restaurantMenus[restaurantSlug]],
+  (entities, menuIds) => menuIds?.map(id => entities[id]) || []
+);
+
+// Status and error selectors
+export const selectMenuStatuses = state => state.menus.status;
+export const selectMenuErrors = state => state.menus.error;
+export const selectMenuFilters = state => state.menus.filters;
+export const selectMenuPagination = state => state.menus.pagination;
+export const selectMenuCache = state => state.menus.cache;
+
+// Enhanced filtered selector with memoization
 export const selectFilteredMenus = createSelector(
   [selectAllMenus, selectMenuFilters],
   (menus, filters) => {
     return menus.filter(menu => {
-      let matches = true;
-      const {
-        category,
-        type,
-        restaurant,
-        status
-      } = filters;
-
-      if (category) {
-        matches = matches && menu.category === category;
-      }
-      if (type) {
-        matches = matches && menu.type === type;
-      }
-      if (restaurant) {
-        matches = matches && menu.restaurants.includes(restaurant);
-      }
-      if (status) {
-        matches = matches && menu.status === status;
-      }
-
-      return matches;
+      const { category, type, restaurant, status } = filters;
+      return (!category || menu.category === category) &&
+             (!type || menu.type === type) &&
+             (!restaurant || menu.restaurants.includes(restaurant)) &&
+             (!status || menu.status === status);
     });
   }
 );

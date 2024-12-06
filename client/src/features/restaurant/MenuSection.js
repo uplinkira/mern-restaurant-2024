@@ -1,62 +1,65 @@
-// client/src/features/restaurant/MenuSection.js
-import React, { useMemo, useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import {
   fetchMenus,
-  selectAllMenus,
-  selectMenuListStatus,
-  selectMenuError
+  selectMenusByRestaurant,
+  selectMenuStatuses,
+  selectMenuErrors,
+  selectMenuCache
 } from '../../redux/slices/menuSlice';
-import {
-  selectCurrentRestaurant,
-} from '../../redux/slices/restaurantSlice';
 import '../../App.css';
 
-const MenuSection = ({ restaurantSlug }) => {
+const MenuSection = ({ restaurant, restaurantSlug }) => {
   const dispatch = useDispatch();
-  const currentRestaurant = useSelector(selectCurrentRestaurant);
-  const menus = useSelector(selectAllMenus);
-  const menuStatus = useSelector(selectMenuListStatus);
-  const menuError = useSelector(selectMenuError);
+  const menuStatus = useSelector(state => selectMenuStatuses(state).list);
+  const menuError = useSelector(state => selectMenuErrors(state).list);
+  const cache = useSelector(selectMenuCache);
+  const storeMenus = useSelector(state => selectMenusByRestaurant(restaurantSlug)(state));
+  
+  // 使用 restaurant prop 中的菜单或从 store 获取
+  const menus = restaurant?.menuDetails || storeMenus;
 
   useEffect(() => {
-    if (restaurantSlug) {
-      dispatch(fetchMenus({ restaurantSlug }));
+    if (restaurantSlug && !restaurant?.menuDetails?.length) {
+      const shouldFetch = !cache.timestamp || 
+                         cache.invalidated || 
+                         cache.lastRestaurant !== restaurantSlug;
+
+      if (shouldFetch) {
+        dispatch(fetchMenus({ 
+          restaurantSlug,
+          forceFetch: cache.invalidated 
+        }));
+      }
     }
-  }, [dispatch, restaurantSlug]);
+  }, [dispatch, restaurantSlug, restaurant?.menuDetails, cache]);
 
-  // Move all useMemo hooks to the top level
-  const categorizedDishes = useMemo(() => {
-    return menus.reduce((acc, menu) => {
-      if (menu.dishes && Array.isArray(menu.dishes)) {
-        acc[menu.slug] = {
-          ...menu,
-          dishes: menu.dishes.sort((a, b) => {
-            if (a.isSignatureDish !== b.isSignatureDish) {
-              return b.isSignatureDish ? 1 : -1;
-            }
-            return a.name.localeCompare(b.name);
-          })
-        };
+  // 菜单分类
+  const categoryMenuMap = useMemo(() => {
+    return menus?.reduce((acc, menu) => {
+      if (!menu) return acc;
+      const category = menu.category;
+      if (!acc[category]) {
+        acc[category] = [];
       }
+      acc[category].push(menu);
       return acc;
-    }, {});
+    }, {}) || {};
   }, [menus]);
 
-  const groupedMenus = useMemo(() => {
-    return menus.reduce((acc, menu) => {
-      if (!acc[menu.category]) {
-        acc[menu.category] = [];
-      }
-      acc[menu.category].push(menu);
-      return acc;
-    }, {});
-  }, [menus]);
+  // 渲染菜品卡片
+  const renderDishCard = (dish) => (
+    <DishCard 
+      key={dish.slug} 
+      dish={dish}
+      restaurantName={restaurant?.name}
+    />
+  );
 
+  // 渲染菜单
   const renderMenu = (menu) => {
-    const menuData = categorizedDishes[menu.slug];
-    const menuDishes = menuData?.dishes || [];
+    if (!menu) return null;
     
     return (
       <div key={menu.slug} className="menu-section card">
@@ -72,15 +75,9 @@ const MenuSection = ({ restaurantSlug }) => {
         
         <p className="menu-description">{menu.description}</p>
         
-        {menuDishes.length > 0 ? (
+        {menu.dishes?.length > 0 ? (
           <div className="dishes-grid">
-            {menuDishes.map(dish => (
-              <DishCard 
-                key={dish.slug} 
-                dish={dish}
-                restaurantName={currentRestaurant?.name}
-              />
-            ))}
+            {menu.dishes.map(renderDishCard)}
           </div>
         ) : (
           <p className="no-dishes">No dishes available in this menu</p>
@@ -95,22 +92,44 @@ const MenuSection = ({ restaurantSlug }) => {
     );
   };
 
-  if (menuStatus === 'loading') {
-    return <div className="loading">Loading menus...</div>;
+  // 加载状态
+  if (menuStatus === 'loading' && !menus?.length) {
+    return <div className="loading" role="alert">Loading menus...</div>;
   }
 
+  // 错误状态
   if (menuStatus === 'failed') {
-    return <div className="error">Error: {menuError}</div>;
+    return (
+      <div className="error" role="alert">
+        <p>Error loading menus: {menuError?.message}</p>
+        <button 
+          onClick={() => dispatch(fetchMenus({ 
+            restaurantSlug, 
+            forceFetch: true 
+          }))}
+          className="retry-button"
+        >
+          Retry Loading
+        </button>
+      </div>
+    );
   }
 
+  // 空状态
   if (!menus?.length) {
-    return <div className="no-menus">No menus available</div>;
+    return (
+      <div className="no-menus" role="alert">
+        <h2>Our Menus</h2>
+        <p>No menus available at the moment.</p>
+      </div>
+    );
   }
 
+  // 主渲染
   return (
     <div className="menus-section">
       <h2>Our Menus</h2>
-      {Object.entries(groupedMenus).map(([category, categoryMenus]) => (
+      {Object.entries(categoryMenuMap).map(([category, categoryMenus]) => (
         <div key={category} className="menu-category">
           <h3 className="category-title">{category}</h3>
           {categoryMenus.map(renderMenu)}
@@ -120,6 +139,7 @@ const MenuSection = ({ restaurantSlug }) => {
   );
 };
 
+// DishCard 组件
 const DishCard = React.memo(({ dish, restaurantName }) => (
   <div className="dish-card">
     <Link to={`/dish/${dish.slug}`}>
@@ -172,8 +192,12 @@ const DishCard = React.memo(({ dish, restaurantName }) => (
       </div>
     </Link>
   </div>
-));
+), (prevProps, nextProps) => {
+  return JSON.stringify(prevProps.dish) === JSON.stringify(nextProps.dish) &&
+         prevProps.restaurantName === nextProps.restaurantName;
+});
 
+// 格式化可用时间辅助函数
 const formatAvailability = (availableTimes) => {
   if (!availableTimes) return '';
 
@@ -193,4 +217,7 @@ const formatAvailability = (availableTimes) => {
   return '';
 };
 
-export default MenuSection;
+export default React.memo(MenuSection, (prevProps, nextProps) => {
+  return prevProps.restaurantSlug === nextProps.restaurantSlug &&
+         prevProps.restaurant?.slug === nextProps.restaurant?.slug;
+});

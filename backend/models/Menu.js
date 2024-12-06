@@ -28,6 +28,19 @@ const openingHoursSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+const MENU_CATEGORIES = [
+  'Chen Pi Prelude',
+  'Chen Pi Main Symphony',
+  'Chen Pi Sweet Finale',
+  'Chen Pi Elixirs',
+  'VR Chen Pi Journey',
+  'Chen Pi Wellness',
+  'Legacy of Chen Pi',
+  'Molecular Chen Pi Creations',
+  'Chen Pi Hot Pot Feast',
+  'Chen Pi Street Eats'
+];
+
 const MenuSchema = new mongoose.Schema(
   {
     name: {
@@ -47,34 +60,12 @@ const MenuSchema = new mongoose.Schema(
       type: String,
       ref: 'Restaurant',
       required: [true, 'At least one restaurant is required'],
-      validate: {
-        validator: async function(slug) {
-          const Restaurant = mongoose.model('Restaurant');
-          const restaurant = await Restaurant.findOne({ 
-            slug, 
-            status: 'active'
-          });
-          return restaurant !== null;
-        },
-        message: 'Referenced restaurant does not exist or is inactive'
-      },
       index: true
     }],
     category: {
       type: String,
       required: true,
-      enum: [
-        'Chen Pi Prelude',
-        'Chen Pi Main Symphony',
-        'Chen Pi Sweet Finale',
-        'Chen Pi Elixirs',
-        'VR Chen Pi Journey',
-        'Chen Pi Wellness',
-        'Legacy of Chen Pi',
-        'Molecular Chen Pi Creations',
-        'Chen Pi Hot Pot Feast',
-        'Chen Pi Street Eats'
-      ],
+      enum: MENU_CATEGORIES,
       index: true
     },
     type: {
@@ -130,6 +121,7 @@ const MenuSchema = new mongoose.Schema(
     order: {
       type: Number,
       default: 0,
+      index: true
     },
     slug: {
       type: String,
@@ -181,24 +173,28 @@ const MenuSchema = new mongoose.Schema(
   }
 );
 
-// Indexes
+// Optimized indexes
 MenuSchema.index({ name: 'text', description: 'text' });
 MenuSchema.index({ restaurants: 1, status: 1 });
 MenuSchema.index({ category: 1, status: 1 });
 MenuSchema.index({ restaurants: 1, category: 1, status: 1 });
 MenuSchema.index({ 'priceRange.min': 1, 'priceRange.max': 1 });
+MenuSchema.index({ order: 1, status: 1 });
 
-// Virtual field for dishes with enhanced population
+// Optimized virtual fields with specific field selection
 MenuSchema.virtual('dishes', {
   ref: 'Dish',
   localField: 'slug',
   foreignField: 'menus',
   justOne: false,
-  options: { lean: true },
+  options: { 
+    lean: true,
+    select: 'name slug price description isSignatureDish allergens ingredients chenPiAge images status',
+    sort: { isSignatureDish: -1, name: 1 }
+  },
   match: { status: 'active' }
 });
 
-// Virtual field for dish count
 MenuSchema.virtual('dishCount', {
   ref: 'Dish',
   localField: 'slug',
@@ -206,43 +202,53 @@ MenuSchema.virtual('dishCount', {
   count: true
 });
 
-// Enhanced pre-save middleware
+// Optimized pre-validate middleware for relationship validation
+MenuSchema.pre('validate', async function(next) {
+  if (this.isModified('restaurants')) {
+    try {
+      const Restaurant = mongoose.model('Restaurant');
+      const restaurantSlugs = [...new Set(this.restaurants)];
+      
+      const validRestaurants = await Restaurant.find({
+        slug: { $in: restaurantSlugs },
+        status: 'active'
+      }).select('slug isVRExperience').lean();
+
+      if (validRestaurants.length !== restaurantSlugs.length) {
+        throw new Error('One or more restaurants are invalid or inactive');
+      }
+
+      // VR validation
+      if (this.isVREnabled) {
+        const hasVRRestaurant = validRestaurants.some(r => r.isVRExperience);
+        if (!hasVRRestaurant) {
+          throw new Error('VR-enabled menus must be associated with VR-capable restaurants');
+        }
+      }
+
+      this.restaurants = restaurantSlugs;
+    } catch (error) {
+      next(error);
+      return;
+    }
+  }
+  next();
+});
+
+// Optimized pre-save middleware
 MenuSchema.pre('save', async function(next) {
   try {
-    // Slug uniqueness
     if (this.isNew || this.isModified('slug')) {
       const slugRegEx = new RegExp(`^(${this.slug})((-[0-9]*)?$)`, 'i');
-      const existingSlugs = await this.constructor.find({ slug: slugRegEx });
+      const existingSlugs = await this.constructor.find({ slug: slugRegEx })
+        .select('slug')
+        .lean();
+      
       if (existingSlugs.length > 0) {
         this.slug = `${this.slug}-${existingSlugs.length + 1}`;
       }
     }
 
-    // VR validation
-    if (this.isVREnabled) {
-      const vrRestaurants = await mongoose.model('Restaurant').find({
-        slug: { $in: this.restaurants },
-        isVRExperience: true
-      });
-      if (vrRestaurants.length === 0) {
-        throw new Error('VR-enabled menus must be associated with VR-capable restaurants');
-      }
-    }
-
-    // Validate restaurant references
-    if (this.isModified('restaurants')) {
-      const Restaurant = mongoose.model('Restaurant');
-      const restaurants = await Restaurant.find({ 
-        slug: { $in: this.restaurants },
-        status: 'active'
-      });
-
-      if (restaurants.length !== this.restaurants.length) {
-        throw new Error('One or more restaurant references are invalid or inactive');
-      }
-    }
-
-    // Image validation
     if (this.isModified('images')) {
       const primaryImages = this.images.filter(img => img.isPrimary);
       if (primaryImages.length > 1) {
@@ -258,7 +264,7 @@ MenuSchema.pre('save', async function(next) {
   }
 });
 
-// Static methods
+// Optimized static methods
 MenuSchema.statics.findByRestaurant = async function(restaurantSlug, options = {}) {
   const { 
     category, 
@@ -274,21 +280,27 @@ MenuSchema.statics.findByRestaurant = async function(restaurantSlug, options = {
 
   if (category) query.category = category;
 
-  let menuQuery = this.find(query).sort('order');
+  let menuQuery = this.find(query)
+    .select('name slug description category type status isVREnabled priceRange order')
+    .sort('order')
+    .lean();
   
   if (includeDishes) {
     menuQuery = menuQuery.populate({
       path: 'dishes',
       match: { status: 'active' },
-      select: 'name slug price description isSignatureDish',
-      options: { sort: { isSignatureDish: -1, name: 1 } }
+      select: 'name slug price description isSignatureDish allergens ingredients chenPiAge',
+      options: { 
+        sort: { isSignatureDish: -1, name: 1 },
+        lean: true
+      }
     });
   }
 
   return menuQuery;
 };
 
-// Instance methods
+// Optimized instance methods
 MenuSchema.methods.isAvailable = function(date = new Date()) {
   const day = date.toLocaleString('en-us', { weekday: 'long' });
   const time = date.toLocaleString('en-us', { 
@@ -297,7 +309,6 @@ MenuSchema.methods.isAvailable = function(date = new Date()) {
     hour12: false 
   });
 
-  // Check seasonal availability
   if (this.availableTimes?.seasonal) {
     const { startDate, endDate, repeatYearly } = this.availableTimes.seasonal;
     const currentDate = date.getTime();
@@ -315,37 +326,40 @@ MenuSchema.methods.isAvailable = function(date = new Date()) {
     }
   }
 
-  // Check daily availability
   const hours = this.availableTimes?.pattern?.[day];
   if (!hours || hours.closed) return false;
   
   return time >= hours.open && time <= hours.close;
 };
 
+// Optimized relationship methods with batched operations
 MenuSchema.methods.addDish = async function(dishSlug) {
   const Dish = mongoose.model('Dish');
-  const dish = await Dish.findOne({ slug: dishSlug, status: 'active' });
+  const dish = await Dish.findOneAndUpdate(
+    { 
+      slug: dishSlug, 
+      status: 'active',
+      menus: { $ne: this.slug }
+    },
+    { $addToSet: { menus: this.slug } },
+    { 
+      new: true,
+      select: 'slug'
+    }
+  );
 
   if (!dish) {
-    throw new Error('Dish not found or inactive');
-  }
-
-  if (!dish.menus.includes(this.slug)) {
-    dish.menus.push(this.slug);
-    await dish.save();
+    throw new Error('Dish not found, inactive, or already added');
   }
 
   return this;
 };
 
 MenuSchema.methods.removeDish = async function(dishSlug) {
-  const Dish = mongoose.model('Dish');
-  const dish = await Dish.findOne({ slug: dishSlug });
-
-  if (dish) {
-    dish.menus = dish.menus.filter(slug => slug !== this.slug);
-    await dish.save();
-  }
+  await mongoose.model('Dish').updateOne(
+    { slug: dishSlug },
+    { $pull: { menus: this.slug } }
+  );
 
   return this;
 };

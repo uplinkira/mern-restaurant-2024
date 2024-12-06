@@ -39,6 +39,12 @@ if (process.env.NODE_ENV === 'development') {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// 在其他中间件之后，路由之前添加
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 // MongoDB connection
 const connectDB = async () => {
   try {

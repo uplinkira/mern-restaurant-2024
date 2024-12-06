@@ -302,7 +302,7 @@ const deleteMenu = async (req, res) => {
 
 const getMenusByRestaurant = async (req, res) => {
   const { slug: restaurantSlug } = req.params;
-  const { category, status = 'active', includeDishes = true } = req.query;
+  const { includeDishes = true } = req.query;
 
   try {
     const restaurant = await Restaurant.findOne({ slug: restaurantSlug });
@@ -313,20 +313,31 @@ const getMenusByRestaurant = async (req, res) => {
       });
     }
 
-    const menus = await Menu.findByRestaurant(restaurantSlug, {
-      category,
-      status,
-      includeDishes
+    const query = Menu.find({
+      restaurants: restaurantSlug,
+      status: 'active'
     });
 
-    successResponse(res, menus, {
-      restaurant: {
-        name: restaurant.name,
-        slug: restaurant.slug
-      }
+    if (includeDishes) {
+      query.populate({
+        path: 'dishes',
+        match: { status: 'active' },
+        select: 'name description price isSignatureDish'
+      });
+    }
+
+    const menus = await query.exec();
+
+    res.status(200).json({
+      success: true,
+      data: menus
     });
   } catch (error) {
-    errorResponse(res, 'Error fetching restaurant menus', error);
+    console.error('Error fetching restaurant menus:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch menus'
+    });
   }
 };
 
