@@ -119,7 +119,10 @@ DishSchema.virtual('menuDetails', {
   localField: 'menus',
   foreignField: 'slug',
   justOne: false,
-  options: { lean: true }, // Optimize for performance
+  options: { 
+    lean: true,
+    match: { status: { $ne: 'inactive' } }
+  }
 });
 
 DishSchema.virtual('restaurantDetails', {
@@ -127,7 +130,10 @@ DishSchema.virtual('restaurantDetails', {
   localField: 'restaurants',
   foreignField: 'slug',
   justOne: false,
-  options: { lean: true }, // Optimize for performance
+  options: { 
+    lean: true,
+    match: { status: { $ne: 'inactive' } }
+  }
 });
 
 // Pre-save middleware for slug generation and validation

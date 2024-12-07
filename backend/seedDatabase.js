@@ -104,8 +104,12 @@ const seedDatabase = async () => {
             return this;
           },
           json: function (data) {
-            console.log(`User registered: ${data.user.email}`);
-            return Promise.resolve(); // Ensure async response
+            if (data.success) {
+              console.log(`User registered: ${data.data.user.email}`);
+            } else {
+              console.error(`Registration failed:`, data.message);
+            }
+            return this;
           },
         };
 

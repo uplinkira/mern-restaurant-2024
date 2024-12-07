@@ -2,15 +2,36 @@
 const express = require('express');
 const router = express.Router();
 const Product = require('../models/Product');
-const Dish = require('../models/Dish'); // Import Dish model for related products
-const Restaurant = require('../models/Restaurant'); // Import Restaurant model for related products
+const Dish = require('../models/Dish');
+const Restaurant = require('../models/Restaurant');
 
-// **GET all products with optional pagination and search**
+// Utility for standardized responses
+const successResponse = (res, data, meta = {}) => {
+  res.status(200).json({ success: true, data, meta });
+};
+
+const errorResponse = (res, message, error, statusCode = 500) => {
+  console.error('Error:', message, error);
+  res.status(statusCode).json({ 
+    success: false, 
+    message,
+    error: error?.message || 'An error occurred'
+  });
+};
+
+// GET all products with optional pagination and search
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = '', category } = req.query;
+    const { 
+      page = 1, 
+      limit = 10, 
+      search = '', 
+      category,
+      sortBy = 'createdAt',
+      order = 'desc'
+    } = req.query;
+    
     const skip = (page - 1) * limit;
-
     const query = {};
 
     if (search) {
@@ -22,65 +43,87 @@ router.get('/', async (req, res) => {
     }
 
     if (category) {
-      query.category = category; // Filter by category if provided
+      query.category = category;
     }
 
-    // Use indexes for fast querying
-    const products = await Product.find(query)
-      .skip(skip)
-      .limit(Number(limit))
-      .sort({ createdAt: -1 })
-      .select('name description category price imageUrls') // Minimize data
-      .populate('relatedDishes', 'name slug') // Only populate necessary fields
-      .populate('relatedRestaurants', 'name slug');
+    const [products, total] = await Promise.all([
+      Product.find(query)
+        .skip(skip)
+        .limit(Number(limit))
+        .sort({ [sortBy]: order === 'desc' ? -1 : 1 })
+        .select('name description category price imageUrls slug isFeatured availableForDelivery')
+        .populate('relatedDishes', 'name slug')
+        .populate('relatedRestaurants', 'name slug'),
+      Product.countDocuments(query)
+    ]);
 
-    const total = await Product.countDocuments(query);
-
-    res.status(200).json({
-      success: true,
-      data: products,
-      meta: { total, page, limit }
+    successResponse(res, products, { 
+      total, 
+      page: Number(page), 
+      limit: Number(limit),
+      totalPages: Math.ceil(total / limit)
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch products',
-      error: error.message
-    });
+    errorResponse(res, 'Failed to fetch products', error);
   }
 });
 
-// **GET a single product by slug**
+// GET a single product by slug
 router.get('/:slug', async (req, res) => {
   const { slug } = req.params;
-  try {
-    const product = await Product.findOne({ slug })
-      .populate('relatedDishes', 'name slug ingredients allergens')
-      .populate('relatedRestaurants', 'name slug');
+  const { includeRelated = 'true' } = req.query;
 
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
+  try {
+    const query = Product.findOne({ slug });
+
+    if (includeRelated === 'true') {
+      query
+        .populate('relatedDishes', 'name slug ingredients allergens price isSignatureDish')
+        .populate('relatedRestaurants', 'name slug cuisineType');
     }
 
-    res.status(200).json(product);
+    const product = await query.exec();
+
+    if (!product) {
+      return errorResponse(res, 'Product not found', null, 404);
+    }
+
+    // Get related products based on category
+    let relatedProducts = [];
+    if (includeRelated === 'true') {
+      relatedProducts = await Product.find({
+        category: product.category,
+        slug: { $ne: product.slug }
+      })
+      .select('name slug price isFeatured')
+      .limit(4);
+    }
+
+    successResponse(res, {
+      ...product.toObject(),
+      relatedProducts
+    });
   } catch (error) {
-    console.error('Error fetching product by slug:', error);
-    res.status(500).json({ message: 'Failed to fetch product' });
+    errorResponse(res, 'Failed to fetch product', error);
   }
 });
 
-// **Helper function to validate related dishes and restaurants**
-async function validateRelatedEntities(dishSlugs, restaurantSlugs) {
+// Helper function to validate related entities
+async function validateRelatedEntities(dishSlugs = [], restaurantSlugs = []) {
+  if (!dishSlugs.length && !restaurantSlugs.length) {
+    return { dishes: [], restaurants: [] };
+  }
+
   const [dishDocs, restaurantDocs] = await Promise.all([
-    Dish.find({ slug: { $in: dishSlugs } }),
-    Restaurant.find({ slug: { $in: restaurantSlugs } }),
+    dishSlugs.length ? Dish.find({ slug: { $in: dishSlugs } }) : [],
+    restaurantSlugs.length ? Restaurant.find({ slug: { $in: restaurantSlugs } }) : []
   ]);
 
-  if (dishDocs.length !== dishSlugs.length) {
+  if (dishSlugs.length && dishDocs.length !== dishSlugs.length) {
     throw new Error('Some related dishes not found');
   }
 
-  if (restaurantDocs.length !== restaurantSlugs.length) {
+  if (restaurantSlugs.length && restaurantDocs.length !== restaurantSlugs.length) {
     throw new Error('Some related restaurants not found');
   }
 
@@ -90,7 +133,7 @@ async function validateRelatedEntities(dishSlugs, restaurantSlugs) {
   };
 }
 
-// **POST create a new product**
+// POST create a new product
 router.post('/', async (req, res) => {
   const {
     name,
@@ -128,14 +171,13 @@ router.post('/', async (req, res) => {
     });
 
     await product.save();
-    res.status(201).json({ message: 'Product created successfully', product });
+    successResponse(res, product, { message: 'Product created successfully' });
   } catch (error) {
-    console.error('Error creating product:', error);
-    res.status(500).json({ message: error.message || 'Failed to create product' });
+    errorResponse(res, 'Failed to create product', error);
   }
 });
 
-// **PUT update a product by slug**
+// PUT update a product by slug
 router.put('/:slug', async (req, res) => {
   const { slug } = req.params;
   const {
@@ -173,31 +215,30 @@ router.put('/:slug', async (req, res) => {
         imageUrls,
       },
       { new: true }
-    ).populate('relatedDishes', 'name slug').populate('relatedRestaurants', 'name slug');
+    ).populate('relatedDishes', 'name slug')
+     .populate('relatedRestaurants', 'name slug');
 
     if (!updatedProduct) {
-      return res.status(404).json({ message: 'Product not found' });
+      return errorResponse(res, 'Product not found', null, 404);
     }
 
-    res.status(200).json({ message: 'Product updated successfully', updatedProduct });
+    successResponse(res, updatedProduct, { message: 'Product updated successfully' });
   } catch (error) {
-    console.error('Error updating product:', error);
-    res.status(500).json({ message: error.message || 'Failed to update product' });
+    errorResponse(res, 'Failed to update product', error);
   }
 });
 
-// **DELETE a product by slug**
+// DELETE a product by slug
 router.delete('/:slug', async (req, res) => {
   const { slug } = req.params;
   try {
     const product = await Product.findOneAndDelete({ slug });
     if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
+      return errorResponse(res, 'Product not found', null, 404);
     }
-    res.status(200).json({ message: 'Product deleted successfully' });
+    successResponse(res, product, { message: 'Product deleted successfully' });
   } catch (error) {
-    console.error('Error deleting product:', error);
-    res.status(500).json({ message: 'Failed to delete product' });
+    errorResponse(res, 'Failed to delete product', error);
   }
 });
 

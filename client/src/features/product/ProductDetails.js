@@ -2,7 +2,14 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchProductDetails } from '../../redux/slices/productSlice';
+import { 
+  fetchProductDetails,
+  selectCurrentProduct,
+  selectRelatedProducts,
+  selectProductStatus,
+  selectProductError,
+  clearCurrentProduct
+} from '../../redux/slices/productSlice';
 import { addItemToCart } from '../../redux/slices/cartSlice';
 import '../../App.css';
 
@@ -11,16 +18,18 @@ const ProductDetails = () => {
   const dispatch = useDispatch();
   const [quantity, setQuantity] = useState(1);
   
-  const { 
-    currentProduct: product, 
-    status, 
-    error 
-  } = useSelector((state) => state.products);
+  const product = useSelector(selectCurrentProduct);
+  const relatedProducts = useSelector(selectRelatedProducts);
+  const status = useSelector(selectProductStatus);
+  const error = useSelector(selectProductError);
 
   useEffect(() => {
     if (slug) {
-      dispatch(fetchProductDetails(slug));
+      dispatch(fetchProductDetails({ slug, includeRelated: true }));
     }
+    return () => {
+      dispatch(clearCurrentProduct());
+    };
   }, [dispatch, slug]);
 
   const handleAddToCart = () => {
@@ -128,11 +137,11 @@ const ProductDetails = () => {
         )}
       </div>
 
-      {product.relatedProducts?.length > 0 && (
+      {relatedProducts?.length > 0 && (
         <div className="related-products card">
           <h2>You Might Also Like</h2>
           <div className="related-grid">
-            {product.relatedProducts.map((relatedProduct) => (
+            {relatedProducts.map((relatedProduct) => (
               <Link 
                 key={relatedProduct.slug} 
                 to={`/product/${relatedProduct.slug}`}

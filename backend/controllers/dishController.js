@@ -118,26 +118,16 @@ const getDishBySlug = async (req, res) => {
   console.log(`[Dishes] Fetching dish: ${slug}, includeRelated: ${includeRelated}`);
 
   try {
-    const query = Dish.findOne({ slug })
-      .populate('restaurantDetails', 'name slug cuisineType priceRange images')
-      .populate('menuDetails', 'name slug category');
-
-    if (includeRelated) {
-      query.populate({
+    const dish = await Dish.findOne({ slug })
+      .populate({
         path: 'restaurantDetails',
-        populate: {
-          path: 'dishes',
-          match: { 
-            slug: { $ne: slug },
-            status: 'active'
-          },
-          select: 'name slug price isSignatureDish images',
-          options: { limit: 4 }
-        }
-      });
-    }
-
-    const dish = await query.lean();
+        select: 'name slug cuisineType priceRange images'
+      })
+      .populate({
+        path: 'menuDetails',
+        select: 'name slug category'
+      })
+      .lean();
 
     if (!dish) {
       return res.status(404).json({
@@ -147,17 +137,25 @@ const getDishBySlug = async (req, res) => {
       });
     }
 
+    // Get related dishes if requested
+    let relatedDishes = [];
+    if (includeRelated) {
+      relatedDishes = await Dish.find({
+        restaurants: { $in: dish.restaurants },
+        slug: { $ne: dish.slug },
+        status: 'active'
+      })
+      .select('name slug price isSignatureDish images')
+      .limit(4)
+      .lean();
+    }
+
     // Format response
     const formattedDish = {
       ...dish,
       restaurants: dish.restaurantDetails,
       menus: dish.menuDetails,
-      relatedDishes: dish.restaurants?.reduce((acc, restaurant) => {
-        if (restaurant.dishes) {
-          acc.push(...restaurant.dishes);
-        }
-        return acc;
-      }, []),
+      relatedDishes,
       restaurantDetails: undefined,
       menuDetails: undefined
     };

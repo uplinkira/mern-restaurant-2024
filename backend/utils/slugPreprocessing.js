@@ -73,31 +73,19 @@ function generateMenuSlug({ name, category }) {
 }
 
 // 生成菜品 slug
-function generateDishSlug({ name, chenPiAge }) {
+function generateDishSlug({ name }) {
   if (!name) return '';
   
-  // 应用菜品名称缩写
-  const nameSlug = applyAllAbbreviations(name);
-  
-  // 添加年份缩写
-  const ageSuffix = chenPiAge ? `-${chenPiAge}${abbreviations.general.year}` : '';
-  
-  return `${nameSlug}${ageSuffix}`;
+  // 只使用菜品名称生成 slug
+  return applyAllAbbreviations(name);
 }
 
 // 生成产品 slug
-function generateProductSlug({ name, category }) {
+function generateProductSlug({ name }) {
   if (!name) return '';
   
-  // 应用产品名称缩写
-  const nameSlug = applyAllAbbreviations(name);
-  
-  // 应用类别缩写
-  const categorySlug = category ? applyAllAbbreviations(category) : '';
-  
-  // 组合 name 和 category，避免重复
-  const slugParts = [...new Set([...nameSlug.split('-'), categorySlug])];
-  return slugParts.filter(Boolean).join('-');
+  // 只使用产品名称生成 slug
+  return applyAllAbbreviations(name);
 }
 
 // 更新 JSON 文件，添加对餐厅引用的处理
