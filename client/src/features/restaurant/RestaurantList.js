@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo } from 'react';
+// client/src/features/restaurant/RestaurantList.js
+import React, { useEffect, useMemo, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { 
@@ -6,8 +7,9 @@ import {
   selectFilteredRestaurants,
   selectRestaurantListStatus,
   selectRestaurantError,
-  selectFeaturedRestaurants,
   selectRestaurantFilters,
+  selectRestaurantPagination,
+  selectHasMore,
   setFilters,
   clearFilters
 } from '../../redux/slices/restaurantSlice';
@@ -193,27 +195,44 @@ const RestaurantList = ({
 }) => {
   const dispatch = useDispatch();
   const restaurants = useSelector(selectFilteredRestaurants);
-  const featuredRestaurants = useSelector(selectFeaturedRestaurants);
   const status = useSelector(selectRestaurantListStatus);
   const error = useSelector(selectRestaurantError);
+  const filters = useSelector(selectRestaurantFilters);
+  const pagination = useSelector(selectRestaurantPagination);
+  const hasMore = useSelector(selectHasMore);
+
+  const observer = useRef();
+  const lastRestaurantRef = useCallback(node => {
+    if (status === 'loading') return;
+    
+    if (observer.current) observer.current.disconnect();
+    
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        dispatch(fetchRestaurants({ 
+          ...filters,
+          page: pagination.currentPage + 1,
+          limit: displayAsFeatured ? 3 : 12
+        }));
+      }
+    });
+    
+    if (node) observer.current.observe(node);
+  }, [status, hasMore, filters, pagination.currentPage, displayAsFeatured, dispatch]);
 
   useEffect(() => {
     dispatch(fetchRestaurants({ 
-      limit: displayAsFeatured ? 3 : limit,
-      featured: displayAsFeatured 
+      ...filters,
+      page: 1,
+      limit: displayAsFeatured ? 3 : 12
     }));
-  }, [dispatch, limit, displayAsFeatured]);
+  }, [dispatch, filters, displayAsFeatured]);
 
   const handleFilterChange = (filterKey, value) => {
     dispatch(setFilters({ [filterKey]: value }));
   };
 
-  const displayedRestaurants = useMemo(() => {
-    const list = displayAsFeatured ? featuredRestaurants : restaurants;
-    return limit ? list.slice(0, limit) : list;
-  }, [displayAsFeatured, featuredRestaurants, restaurants, limit]);
-
-  if (status === 'loading') {
+  if (status === 'loading' && !restaurants.length) {
     return (
       <div className="loading" role="status">
         <div className="loading-spinner"></div>
@@ -222,13 +241,13 @@ const RestaurantList = ({
     );
   }
 
-  if (status === 'failed') {
+  if (status === 'failed' && !restaurants.length) {
     return (
       <div className="error" role="alert">
         <p>Unable to load restaurants</p>
         <p className="error-details">{error}</p>
         <button 
-          onClick={() => dispatch(fetchRestaurants())}
+          onClick={() => dispatch(fetchRestaurants({...filters, page: 1}))}
           className="retry-btn"
         >
           Retry
@@ -245,11 +264,9 @@ const RestaurantList = ({
       {displayAsFeatured ? (
         <div className="section-header">
           <h2>Featured Restaurants</h2>
-          {displayedRestaurants.length >= 3 && (
-            <Link to="/restaurants" className="view-all-link">
-              View All
-            </Link>
-          )}
+          <Link to="/restaurants" className="view-all-link">
+            View All
+          </Link>
         </div>
       ) : showFilters && (
         <div className="list-header">
@@ -266,9 +283,9 @@ const RestaurantList = ({
         </div>
       )}
 
-      {!displayedRestaurants.length ? (
+      {!restaurants.length && status !== 'loading' ? (
         <div className="no-data" role="status">
-          <p>No restaurants available</p>
+          <p>No restaurants found</p>
           {showFilters && (
             <>
               <p>Try adjusting your filters to see more results</p>
@@ -282,20 +299,36 @@ const RestaurantList = ({
           )}
         </div>
       ) : (
-        <div 
-          className={`restaurant-grid ${displayAsFeatured ? 'featured-grid' : ''}`}
-          role="list"
-        >
-          {displayedRestaurants.map((restaurant) => (
-            <div 
-              key={restaurant.slug} 
-              className="restaurant-grid-item" 
-              role="listitem"
-            >
-              <RestaurantCard restaurant={restaurant} />
+        <>
+          <div 
+            className={`restaurant-grid ${displayAsFeatured ? 'featured-grid' : ''}`}
+            role="list"
+          >
+            {restaurants.map((restaurant, index) => (
+              <div 
+                key={restaurant.slug} 
+                ref={restaurants.length === index + 1 ? lastRestaurantRef : null}
+                className="restaurant-grid-item" 
+                role="listitem"
+              >
+                <RestaurantCard restaurant={restaurant} />
+              </div>
+            ))}
+          </div>
+          
+          {status === 'loading' && (
+            <div className="loading-more" role="status">
+              <div className="loading-spinner"></div>
+              <span>Loading more restaurants...</span>
             </div>
-          ))}
-        </div>
+          )}
+          
+          {status === 'noMore' && (
+            <div className="no-more-results" role="status">
+              <p>No more restaurants to load</p>
+            </div>
+          )}
+        </>
       )}
     </section>
   );

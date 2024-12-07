@@ -20,20 +20,16 @@ const ProductSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      enum: ['Food', 'Drink', 'Snack', 'Condiment', 'Other'], // Predefined categories
+      enum: ['Food', 'Drink', 'Snack', 'Condiment', 'Other'],
     },
-    ingredients: [
-      {
-        type: String,
-        trim: true,
-      },
-    ],
-    allergens: [
-      {
-        type: String,
-        trim: true,
-      },
-    ],
+    ingredients: [{
+      type: String,
+      trim: true,
+    }],
+    allergens: [{
+      type: String,
+      trim: true,
+    }],
     price: {
       type: Number,
       required: true,
@@ -52,65 +48,35 @@ const ProductSchema = new mongoose.Schema(
       trim: true,
       maxlength: 200,
     },
-    relatedDishes: [
-      {
-        type: String, // Refers to Dish by slug
-        ref: 'Dish',
-      },
-    ],
-    relatedRestaurants: [
-      {
-        type: String, // Refers to Restaurant by slug
-        ref: 'Restaurant',
-      },
-    ],
     slug: {
       type: String,
       required: true,
       unique: true,
       trim: true,
     },
-    imageUrls: [
-      {
-        type: String,
-        trim: true,
-        match: [/^https?:\/\/.+/, 'Please enter a valid URL'], // Ensure URLs are valid
-      },
-    ],
+    imageUrls: [{
+      type: String,
+      trim: true,
+      match: [/^https?:\/\/.+/, 'Please enter a valid URL'],
+    }],
   },
   {
-    timestamps: true, // Automatically add createdAt and updatedAt fields
+    timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
   }
 );
 
-// Indexing for improved search and query performance
+// 只保留必要的索引
 ProductSchema.index({ name: 'text', description: 'text', category: 1, price: 1 });
 
-// Virtual field to populate related dishes
-ProductSchema.virtual('dishDetails', {
-  ref: 'Dish',
-  localField: 'relatedDishes',
-  foreignField: 'slug',
-  justOne: false,
-});
-
-// Virtual field to populate related restaurants
-ProductSchema.virtual('restaurantDetails', {
-  ref: 'Restaurant',
-  localField: 'relatedRestaurants',
-  foreignField: 'slug',
-  justOne: false,
-});
-
-// Virtual field for formatted price
-ProductSchema.virtual('formattedPrice').get(function () {
+// 虚拟字段 - 格式化价格
+ProductSchema.virtual('formattedPrice').get(function() {
   return `¥${this.price.toFixed(2)}`;
 });
 
-// Middleware for ensuring slug uniqueness on save
-ProductSchema.pre('save', async function (next) {
+// 保留 slug 唯一性检查
+ProductSchema.pre('save', async function(next) {
   if (this.isNew || this.isModified('slug')) {
     const slugRegEx = new RegExp(`^(${this.slug})((-[0-9]*)?$)`, 'i');
     const productsWithSlug = await this.constructor.find({ slug: slugRegEx });
@@ -121,48 +87,19 @@ ProductSchema.pre('save', async function (next) {
   next();
 });
 
-// Pre-update middleware to update timestamps
-ProductSchema.pre('findOneAndUpdate', function (next) {
+// 更新时间戳
+ProductSchema.pre('findOneAndUpdate', function(next) {
   this.set({ updatedAt: Date.now() });
   next();
 });
 
-// Static method to find featured products
-ProductSchema.statics.findFeatured = function () {
+// 只保留必要的静态方法
+ProductSchema.statics.findFeatured = function() {
   return this.find({ isFeatured: true });
 };
 
-// Static method to find products by category
-ProductSchema.statics.findByCategory = function (category) {
+ProductSchema.statics.findByCategory = function(category) {
   return this.find({ category });
-};
-
-// Static method to search products by keyword
-ProductSchema.statics.searchProducts = function (keyword) {
-  const searchRegEx = new RegExp(keyword, 'i');
-  return this.find({
-    $or: [{ name: searchRegEx }, { description: searchRegEx }],
-  });
-};
-
-// Instance method to add related dishes
-ProductSchema.methods.addRelatedDish = function (dishSlug) {
-  if (!this.relatedDishes.includes(dishSlug)) {
-    this.relatedDishes.push(dishSlug);
-  }
-  return this.save();
-};
-
-// Instance method to remove related dish
-ProductSchema.methods.removeRelatedDish = function (dishSlug) {
-  this.relatedDishes = this.relatedDishes.filter((slug) => slug !== dishSlug);
-  return this.save();
-};
-
-// Instance method to toggle featured status
-ProductSchema.methods.toggleFeatured = function () {
-  this.isFeatured = !this.isFeatured;
-  return this.save();
 };
 
 module.exports = mongoose.model('Product', ProductSchema);

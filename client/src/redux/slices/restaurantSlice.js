@@ -7,15 +7,13 @@ export const fetchRestaurants = createAsyncThunk(
   'restaurants/fetchRestaurants',
   async ({ 
     page = 1, 
-    limit = 10,
+    limit = 12,
     sortBy = 'createdAt',
     order = 'desc',
     cuisineType,
     priceRange,
     isVRExperience,
-    status = 'active',
-    location,
-    radius
+    status = 'active'
   } = {}, { rejectWithValue }) => {
     try {
       const response = await axiosInstance.get(API_ENDPOINTS.RESTAURANTS, {
@@ -27,100 +25,103 @@ export const fetchRestaurants = createAsyncThunk(
           cuisineType,
           priceRange,
           isVRExperience,
-          status,
-          ...(location && { location: location.join(',') }),
-          ...(radius && { radius })
+          status
         }
       });
+      
+      // 新的错误处理逻辑
+      if (!response.data.success) {
+        return rejectWithValue(response.data);
+      }
+      
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
+      // 增强错误处理
+      if (error.response?.status === 404) {
+        return rejectWithValue({
+          message: 'No more restaurants found',
+          noMore: true,
+          meta: error.response.data.meta
+        });
+      }
+      return rejectWithValue(error.response?.data || { message: error.message });
     }
   }
 );
 
 export const fetchRestaurantDetails = createAsyncThunk(
   'restaurants/fetchRestaurantDetails',
-  async ({ slug, includeMenus = true, includeDishes = true }, { rejectWithValue }) => {
-    try {
-      const [restaurantResponse, menuResponse] = await Promise.all([
-        axiosInstance.get(API_ENDPOINTS.RESTAURANT_DETAILS(slug)),
-        includeMenus ? axiosInstance.get(API_ENDPOINTS.RESTAURANT_MENU(slug), {
-          params: { includeDishes }
-        }) : Promise.resolve({ data: { data: [] } })
-      ]);
-
-      const restaurant = restaurantResponse.data.data;
-      const menus = menuResponse.data.data;
-
-      return {
-        ...restaurant,
-        menuDetails: menus
-      };
-    } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
-    }
-  }
-);
-
-export const searchRestaurants = createAsyncThunk(
-  'restaurants/searchRestaurants',
   async ({ 
-    q, 
-    cuisineType,
-    priceRange,
-    isVRExperience,
-    location,
-    radius,
-    page = 1,
-    limit = 10
+    slug, 
+    includeMenus = true, 
+    includeDishes = true,
+    menuStatus = 'active',
+    dishStatus = 'active'
   }, { rejectWithValue }) => {
     try {
-      const response = await axiosInstance.get(API_ENDPOINTS.SEARCH_RESTAURANTS, {
-        params: {
-          q,
-          cuisineType,
-          priceRange,
-          isVRExperience,
-          location: location?.join(','),
-          radius,
-          page,
-          limit
+      const response = await axiosInstance.get(
+        API_ENDPOINTS.RESTAURANTS_DETAILS(slug), 
+        {
+          params: { 
+            includeMenus, 
+            includeDishes,
+            menuStatus,
+            dishStatus
+          }
         }
-      });
-      return response.data;
+      );
+
+      if (!response.data.success) {
+        return rejectWithValue(response.data);
+      }
+
+      return response.data.data;
     } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
+      if (error.response?.status === 404) {
+        return rejectWithValue({
+          message: 'Restaurant not found',
+          notFound: true
+        });
+      }
+
+      return rejectWithValue(error.response?.data || { 
+        message: error.message || 'Failed to fetch restaurant details'
+      });
     }
   }
 );
 
+// 简化初始状态
 const initialState = {
   list: [],
   currentRestaurant: null,
-  nearbyRestaurants: [],
-  featuredRestaurants: [], // 新增
   pagination: {
     currentPage: 1,
     totalPages: 1,
-    itemsPerPage: 10,
+    itemsPerPage: 12,
     totalItems: 0
   },
   listStatus: 'idle',
   detailStatus: 'idle',
-  searchStatus: 'idle',
   error: null,
   filters: {
     cuisineType: null,
     priceRange: null,
     isVRExperience: null,
-    isFeatured: null, // 新增
-    radius: 5000,
-    location: null,
-    sortBy: 'rating',
+    sortBy: 'createdAt',
     order: 'desc'
   },
-  lastFetch: null
+  lastFetch: null,
+  menuFilters: {
+    category: null,
+    status: 'active'
+  },
+  dishFilters: {
+    isSignature: false,
+    minPrice: null,
+    maxPrice: null,
+    allergens: []
+  }
 };
 
 const restaurantSlice = createSlice({
@@ -129,36 +130,37 @@ const restaurantSlice = createSlice({
   reducers: {
     clearCurrentRestaurant: (state) => {
       state.currentRestaurant = null;
-      state.detailStatus = 'idle';
       state.error = null;
     },
     clearRestaurantList: (state) => {
       state.list = [];
       state.listStatus = 'idle';
       state.error = null;
+      state.pagination = initialState.pagination;
     },
     setFilters: (state, action) => {
       state.filters = { ...state.filters, ...action.payload };
+      // 重置分页
+      state.pagination.currentPage = 1;
     },
     clearFilters: (state) => {
       state.filters = initialState.filters;
+      state.pagination.currentPage = 1;
     },
     setPagination: (state, action) => {
       state.pagination = { ...state.pagination, ...action.payload };
     },
-    setLocation: (state, action) => {
-      state.filters.location = action.payload;
+    setMenuFilters: (state, action) => {
+      state.menuFilters = { ...state.menuFilters, ...action.payload };
     },
-    setSorting: (state, action) => {
-      const { sortBy, order } = action.payload;
-      state.filters.sortBy = sortBy;
-      state.filters.order = order;
+    setDishFilters: (state, action) => {
+      state.dishFilters = { ...state.dishFilters, ...action.payload };
     },
-    updateRestaurantMenus: (state, action) => {
-      const { restaurantSlug, menus } = action.payload;
-      if (state.currentRestaurant?.slug === restaurantSlug) {
-        state.currentRestaurant.menuDetails = menus;
-      }
+    clearMenuFilters: (state) => {
+      state.menuFilters = initialState.menuFilters;
+    },
+    clearDishFilters: (state) => {
+      state.dishFilters = initialState.dishFilters;
     }
   },
   extraReducers: (builder) => {
@@ -169,26 +171,39 @@ const restaurantSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchRestaurants.fulfilled, (state, action) => {
+        const { data, meta } = action.payload;
         state.listStatus = 'succeeded';
-        state.list = Array.isArray(action.payload?.data) ? action.payload.data : [];
-        state.featuredRestaurants = Array.isArray(action.payload?.data) 
-          ? action.payload.data.filter(r => r.isFeatured) 
-          : [];
+        
+        // 处理分页加载
+        if (meta.page === 1) {
+          state.list = data;
+        } else {
+          state.list = [...state.list, ...data];
+        }
+
         state.pagination = {
-          currentPage: action.payload?.meta?.page || 1,
-          totalPages: action.payload?.meta?.totalPages || 1,
-          itemsPerPage: action.payload?.meta?.limit || 10,
-          totalItems: action.payload?.meta?.total || 0
+          currentPage: meta.page,
+          totalPages: meta.totalPages,
+          itemsPerPage: meta.limit,
+          totalItems: meta.total
         };
+        
         state.lastFetch = new Date().toISOString();
         state.error = null;
       })
       .addCase(fetchRestaurants.rejected, (state, action) => {
-        state.listStatus = 'failed';
-        state.error = action.payload?.message || 'Failed to fetch restaurants';
+        // 处理"没有更多"的况
+        if (action.payload?.noMore) {
+          state.listStatus = 'noMore';
+          state.pagination = {
+            ...state.pagination,
+            ...action.payload.meta
+          };
+        } else {
+          state.listStatus = 'failed';
+        }
+        state.error = action.payload?.message;
       })
-
-      // Handle fetchRestaurantDetails
       .addCase(fetchRestaurantDetails.pending, (state) => {
         state.detailStatus = 'loading';
         state.error = null;
@@ -196,31 +211,23 @@ const restaurantSlice = createSlice({
       .addCase(fetchRestaurantDetails.fulfilled, (state, action) => {
         state.detailStatus = 'succeeded';
         state.currentRestaurant = action.payload;
+        if (action.payload.menuList?.length) {
+          const menusByCategory = action.payload.menuList.reduce((acc, menu) => {
+            if (!acc[menu.category]) {
+              acc[menu.category] = [];
+            }
+            acc[menu.category].push(menu);
+            return acc;
+          }, {});
+          state.currentRestaurant.menusByCategory = menusByCategory;
+          state.currentRestaurant.menuCategories = Object.keys(menusByCategory);
+        }
         state.error = null;
       })
       .addCase(fetchRestaurantDetails.rejected, (state, action) => {
-        state.detailStatus = 'failed';
+        state.detailStatus = action.payload?.notFound ? 'notFound' : 'failed';
         state.error = action.payload?.message || 'Failed to fetch restaurant details';
-      })
-
-      // Handle searchRestaurants
-      .addCase(searchRestaurants.pending, (state) => {
-        state.searchStatus = 'loading';
-        state.error = null;
-      })
-      .addCase(searchRestaurants.fulfilled, (state, action) => {
-        state.searchStatus = 'succeeded';
-        state.list = action.payload.data;
-        state.pagination = {
-          currentPage: action.payload.meta.page,
-          totalPages: action.payload.meta.totalPages,
-          itemsPerPage: action.payload.meta.limit,
-          totalItems: action.payload.meta.total
-        };
-      })
-      .addCase(searchRestaurants.rejected, (state, action) => {
-        state.searchStatus = 'failed';
-        state.error = action.payload?.message || 'Search failed';
+        state.currentRestaurant = null;
       });
   }
 });
@@ -231,91 +238,99 @@ export const {
   setFilters,
   clearFilters,
   setPagination,
-  setLocation,
-  setSorting,
-  updateRestaurantMenus
+  setMenuFilters,
+  setDishFilters,
+  clearMenuFilters,
+  clearDishFilters
 } = restaurantSlice.actions;
 
+// Selectors
+const selectRestaurantsState = state => state.restaurants;
+
 // Base Selectors
-export const selectAllRestaurants = (state) => 
-  Array.isArray(state.restaurants?.list) ? state.restaurants.list : [];
-export const selectCurrentRestaurant = (state) => state.restaurants.currentRestaurant;
-export const selectRestaurantListStatus = (state) => state.restaurants.listStatus;
-export const selectRestaurantDetailStatus = (state) => state.restaurants.detailStatus;
-export const selectRestaurantSearchStatus = (state) => state.restaurants.searchStatus;
-export const selectRestaurantError = (state) => state.restaurants.error;
-export const selectRestaurantFilters = (state) => state.restaurants.filters;
-export const selectRestaurantPagination = (state) => state.restaurants.pagination;
-export const selectLastFetch = (state) => state.restaurants.lastFetch;
+export const selectAllRestaurants = state => selectRestaurantsState(state).list;
+export const selectCurrentRestaurant = state => selectRestaurantsState(state).currentRestaurant;
+export const selectRestaurantListStatus = state => selectRestaurantsState(state).listStatus;
+export const selectRestaurantDetailStatus = state => selectRestaurantsState(state).detailStatus;
+export const selectRestaurantError = state => selectRestaurantsState(state).error;
+export const selectRestaurantFilters = state => selectRestaurantsState(state).filters;
+export const selectRestaurantPagination = state => selectRestaurantsState(state).pagination;
+export const selectMenuFilters = state => selectRestaurantsState(state).menuFilters;
+export const selectDishFilters = state => selectRestaurantsState(state).dishFilters;
 
-// Enhanced Selectors
-export const selectRestaurantMenus = (state) => 
-  state.restaurants.currentRestaurant?.menuDetails || [];
-
-export const selectRestaurantDishes = (state) => 
-  state.restaurants.currentRestaurant?.dishDetails || [];
-
-export const selectVRRestaurants = (state) => 
-  Array.isArray(state.restaurants?.list) 
-    ? state.restaurants.list.filter(r => r?.isVRExperience)
-    : [];
-
-export const selectFeaturedRestaurants = (state) => 
-  Array.isArray(state.restaurants?.featuredRestaurants) 
-    ? state.restaurants.featuredRestaurants 
-    : [];
-
-export const selectRestaurantsByPriceRange = (priceRange) => (state) =>
-  Array.isArray(state.restaurants?.list) 
-    ? state.restaurants.list.filter(r => r?.priceRange === priceRange)
-    : [];
-
-export const selectRestaurantsByCuisine = (cuisineType) => (state) =>
-  Array.isArray(state.restaurants?.list)
-    ? state.restaurants.list.filter(r => r?.cuisineType === cuisineType)
-    : [];
-
-export const selectFeaturedAndVRRestaurants = createSelector(
-  [selectFeaturedRestaurants, selectVRRestaurants],
-  (featured, vr) => ({
-    featured,
-    vr,
-    combined: featured.filter(r => r.isVRExperience)
-  })
+// Menu Selectors
+export const selectRestaurantMenus = createSelector(
+  [selectCurrentRestaurant],
+  restaurant => restaurant?.menuList || []
 );
 
+// Restaurant-specific Menu Selectors
+export const selectMenusByRestaurantSlug = createSelector(
+  [selectRestaurantMenus, (_, slug) => slug],
+  (menus, slug) => menus.filter(menu => menu.restaurants.includes(slug))
+);
+
+export const selectMenuCategoriesByRestaurantSlug = createSelector(
+  [selectMenusByRestaurantSlug],
+  menus => {
+    const categories = {};
+    menus.forEach(menu => {
+      if (!categories[menu.category]) {
+        categories[menu.category] = [];
+      }
+      categories[menu.category].push(menu);
+    });
+    return categories;
+  }
+);
+
+// Filtered Menu Selectors
+export const selectFilteredMenus = createSelector(
+  [selectRestaurantMenus, selectMenuFilters],
+  (menus, filters) => {
+    let filteredMenus = [...menus];
+    
+    if (filters.category) {
+      filteredMenus = filteredMenus.filter(menu => menu.category === filters.category);
+    }
+    
+    if (filters.status) {
+      filteredMenus = filteredMenus.filter(menu => menu.status === filters.status);
+    }
+    
+    return filteredMenus;
+  }
+);
+
+// Restaurant List Selectors
 export const selectFilteredRestaurants = createSelector(
   [selectAllRestaurants, selectRestaurantFilters],
   (restaurants, filters) => {
     if (!Array.isArray(restaurants)) return [];
     
     return restaurants.filter(restaurant => {
-      if (!restaurant) return false;
-      
       let matches = true;
-      const {
-        cuisineType,
-        priceRange,
-        isVRExperience,
-        isFeatured
-      } = filters || {};
+      const { cuisineType, priceRange, isVRExperience } = filters;
 
-      if (cuisineType) {
-        matches = matches && restaurant.cuisineType === cuisineType;
-      }
-      if (priceRange) {
-        matches = matches && restaurant.priceRange === priceRange;
-      }
+      if (cuisineType) matches = matches && restaurant.cuisineType === cuisineType;
+      if (priceRange) matches = matches && restaurant.priceRange === priceRange;
       if (typeof isVRExperience === 'boolean') {
         matches = matches && restaurant.isVRExperience === isVRExperience;
-      }
-      if (typeof isFeatured === 'boolean') {
-        matches = matches && restaurant.isFeatured === isFeatured;
       }
 
       return matches;
     });
   }
+);
+
+export const selectIsLastPage = createSelector(
+  [selectRestaurantPagination],
+  pagination => pagination.currentPage >= pagination.totalPages
+);
+
+export const selectHasMore = createSelector(
+  [selectRestaurantListStatus, selectIsLastPage],
+  (status, isLastPage) => status !== 'noMore' && !isLastPage
 );
 
 export default restaurantSlice.reducer;

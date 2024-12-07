@@ -6,22 +6,21 @@ import {
   fetchRestaurantDetails,
   selectCurrentRestaurant,
   selectRestaurantDetailStatus,
-  selectRestaurantError
+  selectRestaurantError,
+  clearCurrentRestaurant
 } from '../../redux/slices/restaurantSlice';
 import MenuSection from './MenuSection';
 import '../../App.css';
 
-const RestaurantDetails = () => {
+const RestaurantDetails = ({ restaurant: propRestaurant }) => {
   const { slug } = useParams();
   const dispatch = useDispatch();
   
-  const restaurant = useSelector(selectCurrentRestaurant);
+  const reduxRestaurant = useSelector(selectCurrentRestaurant);
   const status = useSelector(selectRestaurantDetailStatus);
   const error = useSelector(selectRestaurantError);
 
   useEffect(() => {
-    let mounted = true;
-
     if (slug && status === 'idle') {
       dispatch(fetchRestaurantDetails({ 
         slug, 
@@ -29,11 +28,9 @@ const RestaurantDetails = () => {
         includeDishes: true 
       }));
     }
-
-    return () => {
-      mounted = false;
-    };
   }, [dispatch, slug, status]);
+
+  const restaurant = propRestaurant || reduxRestaurant;
 
   const handleRetry = () => {
     if (slug) {
@@ -43,6 +40,13 @@ const RestaurantDetails = () => {
         includeDishes: true 
       }));
     }
+  };
+
+  // 添加时间格式转换函数
+  const parseTimeRange = (timeString) => {
+    if (!timeString) return { open: undefined, close: undefined };
+    const [open, close] = timeString.split('-').map(t => t.trim());
+    return { open, close };
   };
 
   if (status === 'loading') {
@@ -78,15 +82,15 @@ const RestaurantDetails = () => {
             {restaurant.cuisineType && (
               <span className="cuisine-type">{restaurant.cuisineType}</span>
             )}
-            {restaurant.priceRange && (
+            {restaurant.priceRange && restaurant.priceRange !== '0' && (
               <span className="price-range">{restaurant.priceRange}</span>
             )}
             {restaurant.isVRExperience && (
               <span className="vr-badge">VR Experience Available</span>
             )}
-            {restaurant.rating && (
+            {restaurant.rating?.average > 0 && restaurant.rating?.count > 0 && (
               <div className="rating">
-                <span className="rating-score">{restaurant.rating.average.toFixed(1)}</span>
+                <span className="rating-score">★ {restaurant.rating.average.toFixed(1)}</span>
                 <span className="rating-count">({restaurant.rating.count} reviews)</span>
               </div>
             )}
@@ -144,37 +148,56 @@ const RestaurantDetails = () => {
 
         <div className="hours-info card">
           <h2>Opening Hours</h2>
-          {Object.entries(restaurant.openingHours || {}).map(([day, hours]) => (
-            <div key={day} className="hours-row">
-              <span className="day">{day}</span>
-              <span className="hours">
-                {hours.closed ? 'Closed' : `${hours.open} - ${hours.close}`}
-              </span>
-            </div>
-          ))}
+          {Object.entries(restaurant.openingHours || {}).map(([day, hours]) => {
+            const { open, close } = typeof hours === 'string' ? 
+              parseTimeRange(hours) : 
+              hours;
+
+            return (
+              <div key={day} className="hours-row">
+                <span className="day">{day}</span>
+                <span className="hours">
+                  {open && close ? `${open} - ${close}` : 'Closed'}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {/* Specialties Section */}
       {restaurant.specialties?.length > 0 && (
-        <div className="specialties card">
+        <div className="specialties-section card">
           <h2>Restaurant Specialties</h2>
-          <div className="specialties-list">
+          <div className="specialties-grid">
             {restaurant.specialties.map((specialty, index) => (
-              <span 
+              <div 
                 key={`specialty-${index}`} 
-                className="specialty-tag"
+                className="specialty-card"
               >
-                {specialty}
-              </span>
+                <div className="specialty-icon">
+                  <i className="fas fa-star"></i>
+                </div>
+                <div className="specialty-content">
+                  <h3>{specialty}</h3>
+                  <span className="specialty-tag">
+                    {specialty.includes('VR') ? 'VR Experience' : 
+                     specialty.includes('Seasonal') ? 'Seasonal' : 
+                     'Signature'}
+                  </span>
+                </div>
+              </div>
             ))}
           </div>
         </div>
       )}
 
       {/* Menus Section */}
-      {restaurant && (
-        <MenuSection restaurantSlug={slug} />
+      {restaurant?.menuList?.length > 0 && (
+        <MenuSection 
+          menus={restaurant.menuList} 
+          restaurantSlug={slug}
+        />
       )}
 
       {/* Reservation Information */}
@@ -197,10 +220,15 @@ const RestaurantDetails = () => {
                     key={`timeslot-${index}`} 
                     className="time-slot"
                   >
-                    <span className="time">{slot.time}</span>
-                    <span className="capacity">
-                      Max bookings: {slot.maxBookings}
+                    <span className="time">
+                      {typeof slot === 'string' ? slot : slot.time}
                     </span>
+                    {/* 只在有 maxBookings 时显示 */}
+                    {typeof slot === 'object' && slot.maxBookings && (
+                      <span className="capacity">
+                        Max bookings: {slot.maxBookings}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>

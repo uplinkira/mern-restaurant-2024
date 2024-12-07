@@ -49,16 +49,18 @@ const MenuSchema = new mongoose.Schema(
       required: [true, 'At least one restaurant is required'],
       validate: {
         validator: async function(slug) {
+          if (this.constructor._seedingData) {
+            return true;
+          }
           const Restaurant = mongoose.model('Restaurant');
           const restaurant = await Restaurant.findOne({ 
             slug, 
-            status: 'active'
+            status: { $ne: 'inactive' }
           });
           return restaurant !== null;
         },
         message: 'Referenced restaurant does not exist or is inactive'
-      },
-      index: true
+      }
     }],
     category: {
       type: String,
@@ -155,24 +157,22 @@ const MenuSchema = new mongoose.Schema(
       type: Number,
       min: 1
     },
-    priceRange: {
-      min: {
+    priceCategories: [{
+      name: {
+        type: String,
+        required: true,
+        trim: true
+      },
+      description: {
+        type: String,
+        trim: true
+      },
+      price: {
         type: Number,
         required: true,
         min: 0
-      },
-      max: {
-        type: Number,
-        required: true,
-        min: 0,
-        validate: {
-          validator: function(value) {
-            return value >= this.priceRange.min;
-          },
-          message: 'Maximum price must be greater than minimum price'
-        }
       }
-    }
+    }]
   },
   {
     timestamps: true,
@@ -186,7 +186,7 @@ MenuSchema.index({ name: 'text', description: 'text' });
 MenuSchema.index({ restaurants: 1, status: 1 });
 MenuSchema.index({ category: 1, status: 1 });
 MenuSchema.index({ restaurants: 1, category: 1, status: 1 });
-MenuSchema.index({ 'priceRange.min': 1, 'priceRange.max': 1 });
+MenuSchema.index({ 'priceCategories.price': 1 });
 
 // Virtual field for dishes with enhanced population
 MenuSchema.virtual('dishes', {
@@ -209,6 +209,11 @@ MenuSchema.virtual('dishCount', {
 // Enhanced pre-save middleware
 MenuSchema.pre('save', async function(next) {
   try {
+    // 如果是在 seeding 过程中，跳过验证
+    if (this.constructor._seedingData) {
+      return next();
+    }
+
     // Slug uniqueness
     if (this.isNew || this.isModified('slug')) {
       const slugRegEx = new RegExp(`^(${this.slug})((-[0-9]*)?$)`, 'i');
@@ -234,21 +239,11 @@ MenuSchema.pre('save', async function(next) {
       const Restaurant = mongoose.model('Restaurant');
       const restaurants = await Restaurant.find({ 
         slug: { $in: this.restaurants },
-        status: 'active'
+        status: { $ne: 'inactive' }
       });
 
       if (restaurants.length !== this.restaurants.length) {
         throw new Error('One or more restaurant references are invalid or inactive');
-      }
-    }
-
-    // Image validation
-    if (this.isModified('images')) {
-      const primaryImages = this.images.filter(img => img.isPrimary);
-      if (primaryImages.length > 1) {
-        this.images.forEach((img, index) => {
-          img.isPrimary = index === 0;
-        });
       }
     }
 

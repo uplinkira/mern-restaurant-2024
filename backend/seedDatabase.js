@@ -34,33 +34,48 @@ const seedDatabase = async () => {
       Product.deleteMany({}),
       User.deleteMany({}),
       Cart.deleteMany({}),
-      Order.deleteMany({}), // Clear orders
+      Order.deleteMany({})
     ]);
     console.log('Existing data cleared.');
+
+    // 设置 seeding 标记
+    Menu.prototype.constructor._seedingData = true;
+    Dish.prototype.constructor._seedingData = true;
 
     // Seed Restaurants
     const restaurantDocs = await Restaurant.insertMany(restaurantsData);
     console.log('Restaurants seeded.');
 
-    // Create a restaurant map for slug reference
-    const restaurantMap = new Map(restaurantDocs.map((r) => [r.name, r.slug]));
+    // 创建餐厅 slug 映射
+    const restaurantSlugs = {
+      'Chen Pi Chen Shenzhen': 'cpc-sz',
+      'Chen Pi Chen Zhongshan': 'cpc-zs',
+      'Gan Pi VR Restaurant': 'gp-vr-rest-sz'
+    };
 
     // Seed Menus
-    const menusPromises = menusData.map((menu) => {
-      const restaurantSlugs = menu.restaurants.map((name) => restaurantMap.get(name));
-      return new Menu({ ...menu, restaurants: restaurantSlugs }).save();
+    const menusPromises = menusData.map(menu => {
+      return new Menu({
+        ...menu,
+        restaurants: menu.restaurants
+      }).save();
     });
     const menuDocs = await Promise.all(menusPromises);
     console.log('Menus seeded.');
 
+    // 移除 seeding 标记
+    delete Menu.prototype.constructor._seedingData;
+
     // Create a menu map for slug reference
-    const menuMap = new Map(menuDocs.map((m) => [m.name, m.slug]));
+    const menuMap = new Map(menuDocs.map(m => [m.name, m.slug]));
 
     // Seed Dishes
-    const dishesPromises = dishesData.map((dish) => {
-      const restaurantSlugs = dish.restaurants.map((name) => restaurantMap.get(name));
-      const menuSlugs = dish.menus.map((name) => menuMap.get(name));
-      return new Dish({ ...dish, restaurants: restaurantSlugs, menus: menuSlugs }).save();
+    const dishesPromises = dishesData.map(dish => {
+      return new Dish({
+        ...dish,
+        restaurants: dish.restaurants,
+        menus: dish.menus
+      }).save();
     });
     await Promise.all(dishesPromises);
     console.log('Dishes seeded.');
@@ -121,8 +136,13 @@ const seedDatabase = async () => {
   } catch (error) {
     console.error('Error seeding database:', error.message);
   } finally {
+    // 确保清理所有标记
+    delete Menu.prototype.constructor._seedingData;
+    delete Dish.prototype.constructor._seedingData;
     mongoose.disconnect();
   }
 };
 
 seedDatabase();
+
+// node seedDatabase.js

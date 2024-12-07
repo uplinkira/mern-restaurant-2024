@@ -39,14 +39,22 @@ const DishSchema = new mongoose.Schema(
     menus: [{
       type: String,
       ref: 'Menu',
-      required: [true, 'At least one menu is required'],
+      required: [true, 'Dish must belong to at least one menu'],
       validate: {
-        validator: function(v) {
-          return Array.isArray(v) && v.length > 0;
+        validator: async function(slug) {
+          // 如果是在 seeding 过程中，跳过验证
+          if (this.constructor._seedingData) {
+            return true;
+          }
+          const Menu = mongoose.model('Menu');
+          const menu = await Menu.findOne({ 
+            slug,
+            status: { $ne: 'inactive' }
+          });
+          return menu !== null;
         },
-        message: 'Dish must belong to at least one menu',
-      },
-      index: true, // Add index for menu lookups
+        message: 'Referenced menu does not exist or is inactive'
+      }
     }],
     chenPiAge: {
       type: Number,
@@ -61,14 +69,22 @@ const DishSchema = new mongoose.Schema(
     restaurants: [{
       type: String,
       ref: 'Restaurant',
-      required: [true, 'At least one restaurant is required'],
+      required: [true, 'Dish must belong to at least one restaurant'],
       validate: {
-        validator: function(v) {
-          return Array.isArray(v) && v.length > 0;
+        validator: async function(slug) {
+          // 如果是在 seeding 过程中，跳过验证
+          if (this.constructor._seedingData) {
+            return true;
+          }
+          const Restaurant = mongoose.model('Restaurant');
+          const restaurant = await Restaurant.findOne({ 
+            slug,
+            status: { $ne: 'inactive' }
+          });
+          return restaurant !== null;
         },
-        message: 'Dish must belong to at least one restaurant',
-      },
-      index: true, // Add index for restaurant lookups
+        message: 'Referenced restaurant does not exist or is inactive'
+      }
     }],
     slug: {
       type: String,
@@ -117,6 +133,12 @@ DishSchema.virtual('restaurantDetails', {
 // Pre-save middleware for slug generation and validation
 DishSchema.pre('save', async function(next) {
   try {
+    // 如果是在 seeding 过程中，跳过验证
+    if (this.constructor._seedingData) {
+      return next();
+    }
+
+    // Slug uniqueness
     if (this.isNew || this.isModified('slug')) {
       const slugRegEx = new RegExp(`^(${this.slug})((-[0-9]*)?$)`, 'i');
       const existingSlugs = await this.constructor.find({ slug: slugRegEx });

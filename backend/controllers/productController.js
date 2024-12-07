@@ -56,12 +56,13 @@ const getProductBySlug = async (req, res) => {
   const { slug } = req.params;
 
   try {
-    const product = await Product.findOne({ slug })
-      .populate('relatedDishes', 'name description ingredients')
-      .populate('relatedRestaurants', 'name address');
+    const product = await Product.findOne({ slug });
 
     if (!product) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
     }
 
     successResponse(res, product);
@@ -100,15 +101,11 @@ const createProduct = async (req, res) => {
     isFeatured,
     availableForDelivery,
     caution,
-    relatedDishes = [],
-    relatedRestaurants = [],
     slug,
     imageUrls,
   } = req.body;
 
   try {
-    const { dishes, restaurants } = await validateRelatedEntities(relatedDishes, relatedRestaurants);
-
     const product = new Product({
       name,
       description,
@@ -119,8 +116,6 @@ const createProduct = async (req, res) => {
       isFeatured,
       availableForDelivery,
       caution,
-      relatedDishes: dishes.map((dish) => dish.slug),
-      relatedRestaurants: restaurants.map((restaurant) => restaurant.slug),
       slug,
       imageUrls,
     });

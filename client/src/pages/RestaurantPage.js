@@ -1,112 +1,47 @@
 // client/src/pages/RestaurantPage.js
-
 import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import {
   fetchRestaurantDetails,
   selectCurrentRestaurant,
   selectRestaurantDetailStatus,
   selectRestaurantError,
+  clearCurrentRestaurant
 } from '../redux/slices/restaurantSlice';
-import {
-  fetchDishesByRestaurant,
-  selectAllDishes,
-  selectDishStatus,
-  selectDishError,
-} from '../redux/slices/dishSlice';
 import RestaurantDetails from '../features/restaurant/RestaurantDetails';
-import '../App.css';
+import RestaurantList from '../features/restaurant/RestaurantList';
 
 const RestaurantPage = () => {
   const { slug } = useParams();
   const dispatch = useDispatch();
-  const navigate = useNavigate();
-
-  const currentRestaurant = useSelector(selectCurrentRestaurant);
-  const restaurantStatus = useSelector(selectRestaurantDetailStatus);
-  const restaurantError = useSelector(selectRestaurantError);
-
-  const dishes = useSelector(selectAllDishes);
-  const dishStatus = useSelector(selectDishStatus);
-  const dishError = useSelector(selectDishError);
+  const status = useSelector(selectRestaurantDetailStatus);
+  const restaurant = useSelector(selectCurrentRestaurant);
+  const error = useSelector(selectRestaurantError);
 
   useEffect(() => {
     if (slug) {
-      dispatch(fetchRestaurantDetails({ 
-        slug,
-        includeMenus: true, 
-        includeDishes: true 
-      }));
-      dispatch(fetchDishesByRestaurant({ restaurantSlug: slug }));
+      dispatch(fetchRestaurantDetails({ slug }));
     }
+
+    return () => {
+      dispatch(clearCurrentRestaurant());
+    };
   }, [dispatch, slug]);
 
-  const isLoading = restaurantStatus === 'loading' || dishStatus === 'loading';
-  const hasError = restaurantError || dishError;
-
-  if (isLoading) {
-    return (
-      <div className="loading-container" role="status">
-        <div className="loading-spinner"></div>
-        <p className="loading-text">Loading restaurant information...</p>
-      </div>
-    );
+  if (status === 'loading') {
+    return <div className="loading">Loading...</div>;
   }
 
-  if (hasError) {
-    return (
-      <div className="error-container" role="alert">
-        <h2>Unable to Load Restaurant</h2>
-        <p className="error-message">
-          {restaurantError || dishError || 'An unexpected error occurred'}
-        </p>
-        <div className="error-actions">
-          <button
-            onClick={() => {
-              dispatch(fetchRestaurantDetails({ 
-                slug,
-                includeMenus: true, 
-                includeDishes: true 
-              }));
-            }}
-            className="retry-button"
-          >
-            Retry
-          </button>
-          <button
-            onClick={() => navigate('/restaurants')}
-            className="back-button"
-          >
-            Return to Restaurants
-          </button>
-        </div>
-      </div>
-    );
+  if (status === 'failed') {
+    return <div className="error">{error}</div>;
   }
 
-  if (!currentRestaurant) {
-    return (
-      <div className="not-found-container" role="alert">
-        <h2>Restaurant Not Found</h2>
-        <p>The restaurant you're looking for doesn't exist or has been removed.</p>
-        <button
-          onClick={() => navigate('/restaurants')}
-          className="back-button"
-        >
-          Browse Restaurants
-        </button>
-      </div>
-    );
+  if (status === 'notFound' || !restaurant) {
+    return <div className="not-found">Restaurant not found</div>;
   }
 
-  return (
-    <div className="restaurant-page">
-      <div className="restaurant-page-content">
-        <RestaurantDetails />
-      </div>
-    </div>
-  );
+  return <RestaurantDetails restaurant={restaurant} />;
 };
 
 export default RestaurantPage;

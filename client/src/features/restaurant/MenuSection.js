@@ -1,126 +1,222 @@
 // client/src/features/restaurant/MenuSection.js
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import {
-  fetchMenus,
-  selectAllMenus,
-  selectMenuListStatus,
-  selectMenuError
-} from '../../redux/slices/menuSlice';
-import {
-  selectCurrentRestaurant,
+  selectMenusByRestaurantSlug,
+  selectMenuCategoriesByRestaurantSlug,
+  selectMenuFilters,
+  selectRestaurantDetailStatus,
+  selectRestaurantError,
+  fetchRestaurantDetails,
+  setMenuFilters
 } from '../../redux/slices/restaurantSlice';
 import '../../App.css';
 
-const MenuSection = ({ restaurantSlug }) => {
-  const dispatch = useDispatch();
-  const currentRestaurant = useSelector(selectCurrentRestaurant);
-  const menus = useSelector(selectAllMenus);
-  const menuStatus = useSelector(selectMenuListStatus);
-  const menuError = useSelector(selectMenuError);
-
-  useEffect(() => {
-    if (restaurantSlug) {
-      dispatch(fetchMenus({ restaurantSlug }));
-    }
-  }, [dispatch, restaurantSlug]);
-
-  // Move all useMemo hooks to the top level
-  const categorizedDishes = useMemo(() => {
-    return menus.reduce((acc, menu) => {
-      if (menu.dishes && Array.isArray(menu.dishes)) {
-        acc[menu.slug] = {
-          ...menu,
-          dishes: menu.dishes.sort((a, b) => {
-            if (a.isSignatureDish !== b.isSignatureDish) {
-              return b.isSignatureDish ? 1 : -1;
-            }
-            return a.name.localeCompare(b.name);
-          })
-        };
-      }
-      return acc;
-    }, {});
-  }, [menus]);
-
-  const groupedMenus = useMemo(() => {
-    return menus.reduce((acc, menu) => {
-      if (!acc[menu.category]) {
-        acc[menu.category] = [];
-      }
-      acc[menu.category].push(menu);
-      return acc;
-    }, {});
-  }, [menus]);
-
-  const renderMenu = (menu) => {
-    const menuData = categorizedDishes[menu.slug];
-    const menuDishes = menuData?.dishes || [];
-    
-    return (
-      <div key={menu.slug} className="menu-section card">
-        <div className="menu-header">
-          <h3>{menu.name}</h3>
-          {menu.type === 'seasonal' && (
-            <span className="seasonal-badge">Seasonal</span>
-          )}
-          {menu.isVREnabled && (
-            <span className="vr-badge">VR Experience</span>
-          )}
-        </div>
-        
-        <p className="menu-description">{menu.description}</p>
-        
-        {menuDishes.length > 0 ? (
-          <div className="dishes-grid">
-            {menuDishes.map(dish => (
-              <DishCard 
-                key={dish.slug} 
-                dish={dish}
-                restaurantName={currentRestaurant?.name}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="no-dishes">No dishes available in this menu</p>
-        )}
-
-        {menu.availableTimes && (
-          <div className="menu-availability">
-            <p>Available: {formatAvailability(menu.availableTimes)}</p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  if (menuStatus === 'loading') {
-    return <div className="loading">Loading menus...</div>;
-  }
-
-  if (menuStatus === 'failed') {
-    return <div className="error">Error: {menuError}</div>;
-  }
-
-  if (!menus?.length) {
-    return <div className="no-menus">No menus available</div>;
-  }
-
+const MenuSectionSkeleton = () => {
   return (
-    <div className="menus-section">
-      <h2>Our Menus</h2>
-      {Object.entries(groupedMenus).map(([category, categoryMenus]) => (
-        <div key={category} className="menu-category">
-          <h3 className="category-title">{category}</h3>
-          {categoryMenus.map(renderMenu)}
+    <div className="menus-section skeleton">
+      <div className="skeleton-header">
+        <div className="skeleton-title"></div>
+      </div>
+      
+      {[1, 2, 3].map((item) => (
+        <div key={item} className="menu-category skeleton">
+          <div className="skeleton-category-title"></div>
+          
+          {[1, 2].map((menuItem) => (
+            <div key={menuItem} className="menu-card skeleton">
+              <div className="skeleton-menu-header">
+                <div className="skeleton-menu-title"></div>
+                <div className="skeleton-badges"></div>
+              </div>
+              <div className="skeleton-description"></div>
+              <div className="skeleton-dishes-grid">
+                {[1, 2, 3].map((dish) => (
+                  <div key={dish} className="skeleton-dish-card">
+                    <div className="skeleton-dish-header"></div>
+                    <div className="skeleton-dish-description"></div>
+                    <div className="skeleton-dish-price"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ))}
     </div>
   );
 };
 
-const DishCard = React.memo(({ dish, restaurantName }) => (
+const MenuSection = ({ restaurantSlug }) => {
+  const dispatch = useDispatch();
+  // 使用新的选择器
+  const menus = useSelector(state => selectMenusByRestaurantSlug(state, restaurantSlug));
+  const menusByCategory = useSelector(state => selectMenuCategoriesByRestaurantSlug(state, restaurantSlug));
+  const menuCategories = useMemo(() => Object.keys(menusByCategory), [menusByCategory]);
+  const menuFilters = useSelector(selectMenuFilters);
+  const detailStatus = useSelector(selectRestaurantDetailStatus);
+  const error = useSelector(selectRestaurantError);
+
+  // 渲染加载状态
+  if (detailStatus === 'loading') {
+    return <MenuSectionSkeleton />;
+  }
+
+  // 渲染错误状态
+  if (detailStatus === 'failed') {
+    return (
+      <div className="menu-section-error">
+        <p>Failed to load menus: {error}</p>
+        <button onClick={() => dispatch(fetchRestaurantDetails({ 
+          slug: restaurantSlug,
+          includeMenus: true,
+          includeDishes: true 
+        }))}>
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  // 渲染空数据状态
+  if (!menus.length) {
+    return (
+      <div className="menu-section-empty">
+        <p>No menus available at this time.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="menus-section">
+      <h2>Our Menus</h2>
+      {/* 菜单分类过滤器 */}
+      {menuCategories.length > 0 && (
+        <div className="menu-filters">
+          <select
+            value={menuFilters.category || ''}
+            onChange={(e) => dispatch(setMenuFilters({ 
+              category: e.target.value || null 
+            }))}
+          >
+            <option value="">All Categories</option>
+            {menuCategories.map(category => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* 菜单分类展示 */}
+      {Object.entries(menusByCategory).map(([category, categoryMenus]) => (
+        (!menuFilters.category || menuFilters.category === category) && (
+          <MenuCategory 
+            key={category} 
+            category={category} 
+            menus={categoryMenus}
+            restaurantSlug={restaurantSlug}
+          />
+        )
+      ))}
+    </div>
+  );
+};
+
+// 分离出 MenuCategory 组件
+const MenuCategory = ({ category, menus, restaurantSlug }) => {
+  return (
+    <div className="menu-category">
+      <h3 className="category-title">{category}</h3>
+      <div className="menu-grid">
+        {menus.map(menu => (
+          <MenuCard 
+            key={menu.slug} 
+            menu={menu}
+            restaurantSlug={restaurantSlug}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// 分离出 MenuCard 组件
+const MenuCard = ({ menu, restaurantSlug }) => {
+  return (
+    <div className="menu-card">
+      <div className="menu-header">
+        <h4>{menu.name}</h4>
+        {menu.type !== 'regular' && (
+          <span className={`menu-type ${menu.type}`}>
+            {menu.type.charAt(0).toUpperCase() + menu.type.slice(1)}
+          </span>
+        )}
+      </div>
+      
+      <p className="menu-description">{menu.description}</p>
+      
+      {/* 价格分类展示 */}
+      <div className="price-categories">
+        {menu.priceCategories.map((category, index) => (
+          <div key={index} className="price-category">
+            <h5>{category.name}</h5>
+            <p className="description">{category.description}</p>
+            <span className="price">¥{category.price}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* 可用时间展示 */}
+      {menu.availableTimes && (
+        <div className="availability-info">
+          <p>{formatAvailability(menu.availableTimes)}</p>
+        </div>
+      )}
+
+      {/* 预订信息展示 */}
+      {menu.requiresReservation && (
+        <div className="reservation-info">
+          <p>
+            Reservation required 
+            {menu.minimumDiners && ` (${menu.minimumDiners}-${menu.maximumDiners} guests)`}
+          </p>
+        </div>
+      )}
+
+      {/* 菜品列表展示 */}
+      {menu.dishes?.length > 0 && (
+        <DishList 
+          dishes={menu.dishes} 
+          restaurantSlug={restaurantSlug}
+        />
+      )}
+    </div>
+  );
+};
+
+// 分离出 DishList 组件
+const DishList = ({ dishes, restaurantSlug }) => {
+  if (!dishes?.length) {
+    return <p className="no-dishes">No dishes available in this menu</p>;
+  }
+
+  return (
+    <div className="dishes-grid">
+      {dishes.map(dish => (
+        <DishCard 
+          key={dish.slug} 
+          dish={dish}
+          restaurantSlug={restaurantSlug}
+        />
+      ))}
+    </div>
+  );
+};
+
+const DishCard = React.memo(({ dish, restaurantSlug }) => (
   <div className="dish-card">
     <Link to={`/dish/${dish.slug}`}>
       <div className="dish-header">
@@ -161,12 +257,6 @@ const DishCard = React.memo(({ dish, restaurantName }) => (
                 {dish.ingredients.join(', ')}
               </div>
             )}
-          </div>
-        )}
-
-        {restaurantName && (
-          <div className="restaurant-info">
-            <span>Available at: {restaurantName}</span>
           </div>
         )}
       </div>

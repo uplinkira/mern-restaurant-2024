@@ -1,6 +1,6 @@
 // client/src/App.js
 import React from 'react';
-import { Route, Routes, Link, Navigate, useLocation } from 'react-router-dom';
+import { Route, Routes, Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import useAuth from './hooks/useAuth';
 
 // Common Components
@@ -69,6 +69,76 @@ const PublicRoute = ({ children }) => {
  return children;
 };
 
+// NotFound Component
+const NotFound = () => {
+ const location = useLocation();
+ const path = location.pathname.split('/')[1];
+
+ const getRecommendations = () => {
+   switch(path) {
+     case 'restaurant':
+       return (
+         <div className="recommendations">
+           <h2>Recommended Restaurants</h2>
+           <RestaurantList limit={3} displayAsFeatured={true} />
+         </div>
+       );
+     case 'product':
+       return (
+         <div className="recommendations">
+           <h2>Featured Products</h2>
+           <ProductList limit={3} displayFeatured={true} />
+         </div>
+       );
+     case 'dish':
+       return (
+         <div className="recommendations">
+           <h2>Signature Dishes</h2>
+           <DishList limit={3} displaySignature={true} />
+         </div>
+       );
+     default:
+       return null;
+   }
+ };
+
+ return (
+   <div className="not-found-page">
+     <div className="not-found-content">
+       <h1>Page Not Found</h1>
+       <p>
+         {path === 'restaurant' && "Sorry, we couldn't find this restaurant."}
+         {path === 'product' && "Sorry, we couldn't find this product."}
+         {path === 'dish' && "Sorry, we couldn't find this dish."}
+         {!['restaurant', 'product', 'dish'].includes(path) && 
+           "The page you're looking for doesn't exist."}
+       </p>
+       <div className="action-buttons">
+         <Link to="/" className="btn-primary">
+           Return to Home
+         </Link>
+         {path === 'restaurant' && (
+           <Link to="/restaurants" className="btn-secondary">
+             Browse All Restaurants
+           </Link>
+         )}
+         {path === 'product' && (
+           <Link to="/products" className="btn-secondary">
+             Browse All Products
+           </Link>
+         )}
+         {path === 'dish' && (
+           <Link to="/dishes" className="btn-secondary">
+             Browse All Dishes
+           </Link>
+         )}
+       </div>
+     </div>
+     {getRecommendations()}
+   </div>
+ );
+};
+
 function App() {
  const { isAuthenticated, user, logout, isLoading } = useAuth();
 
@@ -80,7 +150,6 @@ function App() {
    }
  };
 
- // Navigation items configuration
  const navItems = isAuthenticated 
    ? [
        { to: '/', label: 'Home' },
@@ -120,12 +189,22 @@ function App() {
          <Routes>
            {/* Public Routes */}
            <Route path="/" element={<HomePage />} />
+           
+           {/* Restaurant Routes */}
            <Route path="/restaurants" element={<RestaurantList showFilters={true} />} />
-           <Route path="/products" element={<ProductList />} />
            <Route path="/restaurant/:slug" element={<RestaurantPage />} />
-           <Route path="/menu/:slug" element={<MenuSection />} />
-           <Route path="/dish/:slug" element={<DishDetails />} />
+           
+           {/* Product Routes */}
+           <Route path="/products" element={<ProductList />} />
+           <Route path="/product" element={<ProductList />} />
            <Route path="/product/:slug" element={<ProductDetails />} />
+           
+           {/* Dish Routes */}
+           <Route path="/dishes" element={<DishList />} />
+           <Route path="/dish" element={<DishList />} />
+           <Route path="/dish/:slug" element={<DishDetails />} />
+
+           {/* Search Route */}
            <Route path="/search" element={<SearchResults />} />
 
            {/* Auth Routes */}
@@ -173,18 +252,7 @@ function App() {
            />
 
            {/* 404 Route */}
-           <Route 
-             path="*" 
-             element={
-               <div className="not-found">
-                 <h1>404 - Page Not Found</h1>
-                 <p>The page you're looking for doesn't exist.</p>
-                 <Link to="/" className="btn-primary">
-                   Return to Home
-                 </Link>
-               </div>
-             } 
-           />
+           <Route path="*" element={<NotFound />} />
          </Routes>
        </div>
      </main>
