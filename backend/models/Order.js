@@ -45,6 +45,10 @@ const OrderSchema = new mongoose.Schema({
     enum: ['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'completed', 'cancelled'],
     default: 'pending'
   },
+  cancellationReason: {
+    type: String,
+    trim: true
+  },
   deliveryAddress: {
     street: { type: String, required: true },
     city: { type: String, required: true },
@@ -75,7 +79,7 @@ const OrderSchema = new mongoose.Schema({
   restaurant: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Restaurant',
-    required: true
+    required: false
   }
 }, {
   timestamps: true,

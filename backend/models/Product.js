@@ -31,6 +31,11 @@ const ProductSchema = new mongoose.Schema({
     required: [true, 'Product category is required'],
     enum: ['Food', 'Drink', 'Snack', 'Condiment', 'Other']
   },
+  restaurant: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Restaurant',
+    required: [true, 'Product must belong to a restaurant']
+  },
   ingredients: [{
     type: String,
     trim: true

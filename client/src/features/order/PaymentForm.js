@@ -7,123 +7,171 @@ import { clearCart } from '../../redux/slices/cartSlice';
 import '../../App.css';
 
 const PaymentForm = ({ totalAmount, disabled }) => {
- const dispatch = useDispatch();
- const navigate = useNavigate();
- const [loading, setLoading] = useState(false);
- const [error, setError] = useState(null);
- const [paymentMethod, setPaymentMethod] = useState('cash');
- const [orderNote, setOrderNote] = useState('');
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [deliveryAddress, setDeliveryAddress] = useState({
+    street: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: ''
+  });
 
- const handlePayment = async () => {
-   try {
-     setLoading(true);
-     setError(null);
+  const handleAddressChange = (e) => {
+    const { name, value } = e.target;
+    setDeliveryAddress(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
 
-     // Create order
-     const orderData = {
-       paymentMethod,
-       amount: totalAmount,
-       note: orderNote.trim()
-     };
+  const handlePayment = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-     const result = await dispatch(createOrder(orderData)).unwrap();
-     
-     // Clear cart after successful order
-     await dispatch(clearCart());
+      // Validate delivery address
+      if (!deliveryAddress.street || !deliveryAddress.city || !deliveryAddress.state || !deliveryAddress.zipCode || !deliveryAddress.country) {
+        setError('Please fill in all delivery address fields');
+        setLoading(false);
+        return;
+      }
 
-     // Navigate to order confirmation
-     navigate(`/orders/${result.orderId}`, { 
-       state: { 
-         orderComplete: true,
-         orderNumber: result.orderId 
-       }
-     });
+      // Create order with required fields only
+      const orderData = {
+        deliveryAddress,
+        paymentMethod: 'cash',
+        deliveryInstructions: ''
+      };
 
-   } catch (err) {
-     setError(err.message || 'Failed to create order. Please try again.');
-   } finally {
-     setLoading(false);
-   }
- };
+      console.log('Submitting order with data:', {
+        deliveryAddress: {
+          street: orderData.deliveryAddress.street,
+          city: orderData.deliveryAddress.city,
+          state: orderData.deliveryAddress.state,
+          zipCode: orderData.deliveryAddress.zipCode,
+          country: orderData.deliveryAddress.country
+        },
+        paymentMethod: orderData.paymentMethod,
+        deliveryInstructions: orderData.deliveryInstructions
+      });
 
- return (
-   <div className="payment-form">
-     <h3 className="payment-title">Order Details</h3>
+      const result = await dispatch(createOrder(orderData)).unwrap();
+      console.log('Order creation successful:', result);
+      
+      // Clear cart after successful order
+      await dispatch(clearCart());
 
-     {error && (
-       <div className="error-message card">
-         {error}
-       </div>
-     )}
+      // Navigate to order history
+      navigate('/orders');
 
-     <div className="payment-section card">
-       <div className="amount-summary">
-         <h4>Amount to Pay</h4>
-         <p className="total-amount">¥{totalAmount.toFixed(2)}</p>
-       </div>
+    } catch (err) {
+      console.error('Order creation failed:', {
+        error: err,
+        message: err.message,
+        details: err.response?.data
+      });
+      setError(err.message || 'Failed to create order. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-       <div className="payment-method">
-         <h4>Payment Method</h4>
-         <div className="payment-options">
-           <label className="payment-option">
-             <input
-               type="radio"
-               value="cash"
-               checked={paymentMethod === 'cash'}
-               onChange={(e) => setPaymentMethod(e.target.value)}
-               disabled={loading || disabled}
-             />
-             <span>Cash on Delivery</span>
-           </label>
+  return (
+    <div className="payment-form">
+      {error && (
+        <div className="error-message card">
+          {error}
+        </div>
+      )}
 
-           <label className="payment-option">
-             <input
-               type="radio"
-               value="bank"
-               checked={paymentMethod === 'bank'}
-               onChange={(e) => setPaymentMethod(e.target.value)}
-               disabled={loading || disabled}
-             />
-             <span>Bank Transfer</span>
-           </label>
-         </div>
-       </div>
+      <div className="payment-section card">
+        <div className="amount-summary">
+          <h4>Total Amount: ¥{totalAmount.toFixed(2)}</h4>
+        </div>
 
-       <div className="order-notes">
-         <h4>Order Notes (Optional)</h4>
-         <textarea
-           value={orderNote}
-           onChange={(e) => setOrderNote(e.target.value)}
-           placeholder="Add any special instructions or notes for your order"
-           maxLength={200}
-           disabled={loading || disabled}
-           className="order-note-input"
-         />
-       </div>
-     </div>
+        <div className="delivery-address">
+          <h4>Delivery Address</h4>
+          <div className="address-fields">
+            <div className="form-group">
+              <input
+                type="text"
+                name="street"
+                value={deliveryAddress.street}
+                onChange={handleAddressChange}
+                placeholder="Street Address*"
+                disabled={loading || disabled}
+              />
+            </div>
+            <div className="form-group">
+              <input
+                type="text"
+                name="city"
+                value={deliveryAddress.city}
+                onChange={handleAddressChange}
+                placeholder="City*"
+                disabled={loading || disabled}
+              />
+            </div>
+            <div className="form-group">
+              <input
+                type="text"
+                name="state"
+                value={deliveryAddress.state}
+                onChange={handleAddressChange}
+                placeholder="Prefecture*"
+                disabled={loading || disabled}
+              />
+            </div>
+            <div className="form-group">
+              <input
+                type="text"
+                name="zipCode"
+                value={deliveryAddress.zipCode}
+                onChange={handleAddressChange}
+                placeholder="Postal Code*"
+                disabled={loading || disabled}
+              />
+            </div>
+            <div className="form-group">
+              <input
+                type="text"
+                name="country"
+                value={deliveryAddress.country}
+                onChange={handleAddressChange}
+                placeholder="Country*"
+                disabled={loading || disabled}
+              />
+            </div>
+          </div>
+        </div>
 
-     <div className="payment-actions">
-       <button 
-         className="btn confirm-order-btn" 
-         onClick={handlePayment}
-         disabled={loading || disabled}
-       >
-         {loading ? (
-           <span>
-             <span className="loading-spinner"></span>
-             Processing Order...
-           </span>
-         ) : (
-           'Confirm Order'
-         )}
-       </button>
-       
-       <p className="payment-note">
-         By confirming your order, you agree to our Terms of Service and Privacy Policy
-       </p>
-     </div>
-   </div>
- );
+        <div className="payment-method">
+          <h4>Payment Method</h4>
+          <div className="payment-options">
+            <label className="payment-option">
+              <input
+                type="radio"
+                checked={true}
+                disabled={true}
+              />
+              <span>Cash on Delivery</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <button 
+        className="btn confirm-order-btn" 
+        onClick={handlePayment}
+        disabled={loading || disabled}
+      >
+        {loading ? 'Processing...' : 'Confirm Order'}
+      </button>
+    </div>
+  );
 };
 
 export default PaymentForm;

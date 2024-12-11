@@ -39,7 +39,27 @@ const CartSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  items: [CartItemSchema],
+  items: [{
+    product: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Product',
+      required: true
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      min: [1, 'Quantity must be at least 1'],
+      validate: {
+        validator: Number.isInteger,
+        message: 'Quantity must be a whole number'
+      }
+    },
+    price: {
+      type: Number,
+      required: true,
+      min: [0, 'Price cannot be negative']
+    }
+  }],
   totalPrice: {
     type: Number,
     default: 0
@@ -65,18 +85,6 @@ CartSchema.pre('save', async function(next) {
     // Remove items with quantity 0
     this.items = this.items.filter(item => item.quantity > 0);
     
-    // Ensure all items have valid products
-    for (const item of this.items) {
-      if (!item.product) {
-        const product = await mongoose.model('Product').findById(item.productId);
-        if (!product) {
-          throw new Error(`Product not found: ${item.productId}`);
-        }
-        item.product = product._id;
-        item.price = product.price;
-      }
-    }
-    
     // Calculate total price
     this.totalPrice = this.items.reduce((total, item) => {
       return total + (item.price * item.quantity);
@@ -97,19 +105,12 @@ CartSchema.statics.findByUser = async function(userId) {
 
     let cart = await this.findOne({ user: userId });
     if (!cart) {
-      // Create a new cart if one doesn't exist
       cart = await this.create({
         user: userId,
         items: [],
         totalPrice: 0
       });
     }
-
-    // Ensure product details are populated
-    await cart.populate({
-      path: 'items.product',
-      select: 'name slug price stockStatus availableForDelivery category allergens'
-    });
 
     return cart;
   } catch (error) {
@@ -121,6 +122,13 @@ CartSchema.statics.findByUser = async function(userId) {
 // Instance method to add product to cart
 CartSchema.methods.addProduct = async function(productId, quantity = 1) {
   try {
+    console.log('Starting addProduct:', { 
+      productId, 
+      quantity,
+      cartId: this._id,
+      userId: this.user
+    });
+
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       throw new Error('Invalid product ID format');
     }
@@ -142,14 +150,18 @@ CartSchema.methods.addProduct = async function(productId, quantity = 1) {
       throw new Error('Product is not available for delivery');
     }
 
-    const existingItem = this.items.find(item => 
-      item.product.toString() === productId.toString()
-    );
+    // Find existing item index
+    const existingItemIndex = this.items.findIndex(item => {
+      const itemProductId = item.product._id || item.product;
+      return itemProductId.toString() === productId.toString();
+    });
 
-    if (existingItem) {
-      existingItem.quantity += quantity;
-      existingItem.price = product.price;
+    if (existingItemIndex !== -1) {
+      // Update existing item quantity
+      this.items[existingItemIndex].quantity += quantity;
+      this.items[existingItemIndex].price = product.price;
     } else {
+      // Add new item
       this.items.push({
         product: productId,
         quantity,
@@ -157,7 +169,26 @@ CartSchema.methods.addProduct = async function(productId, quantity = 1) {
       });
     }
 
+    console.log('Before save - Cart items:', this.items.map(item => ({
+      productId: (item.product._id || item.product).toString(),
+      quantity: item.quantity,
+      price: item.price
+    })));
+
     await this.save();
+
+    console.log('After save - Cart items:', this.items.map(item => ({
+      productId: (item.product._id || item.product).toString(),
+      quantity: item.quantity,
+      price: item.price
+    })));
+
+    // Populate product details after save
+    await this.populate({
+      path: 'items.product',
+      select: 'name slug price stockStatus availableForDelivery category allergens'
+    });
+
     return this;
   } catch (error) {
     console.error('Error in addProduct:', error);
@@ -185,7 +216,12 @@ CartSchema.methods.updateProductQuantity = async function(productId, quantity) {
 
     // If quantity is 0, remove the item
     if (quantity === 0) {
-      return await this.removeProduct(productId);
+      this.items = this.items.filter(item => {
+        const itemProductId = item.product._id || item.product;
+        return itemProductId.toString() !== productId.toString();
+      });
+      await this.save();
+      return this;
     }
 
     const product = await mongoose.model('Product').findById(productId);
@@ -201,13 +237,14 @@ CartSchema.methods.updateProductQuantity = async function(productId, quantity) {
       throw new Error('Product is not available for delivery');
     }
 
-    // Find the item index
-    const itemIndex = this.items.findIndex(item => 
-      item.product.toString() === productId.toString()
-    );
+    // Find existing item index
+    const existingItemIndex = this.items.findIndex(item => {
+      const itemProductId = item.product._id || item.product;
+      return itemProductId.toString() === productId.toString();
+    });
 
-    if (itemIndex === -1) {
-      // If item doesn't exist, add it
+    if (existingItemIndex === -1) {
+      // Add new item
       this.items.push({
         product: productId,
         quantity,
@@ -215,29 +252,28 @@ CartSchema.methods.updateProductQuantity = async function(productId, quantity) {
       });
     } else {
       // Update existing item
-      this.items[itemIndex].quantity = quantity;
-      this.items[itemIndex].price = product.price;
+      this.items[existingItemIndex].quantity = quantity;
+      this.items[existingItemIndex].price = product.price;
     }
 
-    console.log('Saving cart with updated quantity:', {
-      productId,
-      quantity,
-      price: product.price,
-      itemsCount: this.items.length
-    });
+    console.log('Before save - Cart items:', this.items.map(item => ({
+      productId: (item.product._id || item.product).toString(),
+      quantity: item.quantity,
+      price: item.price
+    })));
 
     await this.save();
+
+    console.log('After save - Cart items:', this.items.map(item => ({
+      productId: (item.product._id || item.product).toString(),
+      quantity: item.quantity,
+      price: item.price
+    })));
     
     // Populate product details after save
     await this.populate({
       path: 'items.product',
       select: 'name slug price stockStatus availableForDelivery category allergens'
-    });
-
-    console.log('Cart saved successfully:', {
-      cartId: this._id,
-      itemCount: this.items.length,
-      totalPrice: this.totalPrice
     });
 
     return this;
@@ -253,43 +289,37 @@ CartSchema.methods.removeProduct = async function(productId) {
     console.log('Starting removeProduct:', { 
       productId,
       cartId: this._id,
-      userId: this.user,
-      currentItems: this.items.length
+      userId: this.user
     });
 
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       throw new Error('Invalid product ID format');
     }
 
-    // Find the item index
-    const itemIndex = this.items.findIndex(item => 
-      item.product.toString() === productId.toString()
-    );
-
-    if (itemIndex === -1) {
-      throw new Error('Product not found in cart');
-    }
-
     // Remove the item
-    this.items.splice(itemIndex, 1);
-
-    console.log('Saving cart after removing product:', {
-      removedProductId: productId,
-      remainingItems: this.items.length
+    this.items = this.items.filter(item => {
+      const itemProductId = item.product._id || item.product;
+      return itemProductId.toString() !== productId.toString();
     });
 
+    console.log('Before save - Cart items:', this.items.map(item => ({
+      productId: (item.product._id || item.product).toString(),
+      quantity: item.quantity,
+      price: item.price
+    })));
+
     await this.save();
+
+    console.log('After save - Cart items:', this.items.map(item => ({
+      productId: (item.product._id || item.product).toString(),
+      quantity: item.quantity,
+      price: item.price
+    })));
 
     // Populate product details after save
     await this.populate({
       path: 'items.product',
       select: 'name slug price stockStatus availableForDelivery category allergens'
-    });
-
-    console.log('Cart saved successfully:', {
-      cartId: this._id,
-      itemCount: this.items.length,
-      totalPrice: this.totalPrice
     });
 
     return this;
@@ -307,7 +337,7 @@ CartSchema.methods.clearCart = async function() {
     await this.save();
     return this;
   } catch (error) {
-    console.error('Error in clearCart:', error);
+    console.error('Error clearing cart:', error);
     throw error;
   }
 };
@@ -315,41 +345,28 @@ CartSchema.methods.clearCart = async function() {
 // Instance method to check delivery availability
 CartSchema.methods.checkDeliveryAvailability = async function() {
   try {
-    const unavailableItems = [];
+    console.log('Checking delivery availability for cart:', this._id);
     
-    for (const item of this.items) {
-      const product = await mongoose.model('Product').findById(item.product);
-      if (!product) {
-        unavailableItems.push({
-          productId: item.product,
-          reason: 'Product not found'
-        });
-        continue;
-      }
+    // Ensure items are populated
+    await this.populate({
+      path: 'items.product',
+      select: 'name slug price stockStatus availableForDelivery'
+    });
 
-      if (product.stockStatus === 'out_of_stock') {
-        unavailableItems.push({
-          productId: item.product,
-          name: product.name,
-          reason: 'Out of stock'
-        });
-      }
+    const unavailableItems = this.items.filter(item => {
+      const product = item.product;
+      return !product.availableForDelivery || product.stockStatus === 'out_of_stock';
+    });
 
-      if (!product.availableForDelivery) {
-        unavailableItems.push({
-          productId: item.product,
-          name: product.name,
-          reason: 'Not available for delivery'
-        });
-      }
-    }
+    console.log('Delivery availability check result:', {
+      cartId: this._id,
+      totalItems: this.items.length,
+      unavailableItems: unavailableItems.length
+    });
 
-    return {
-      isDeliverable: unavailableItems.length === 0,
-      unavailableItems
-    };
+    return unavailableItems;
   } catch (error) {
-    console.error('Error in checkDeliveryAvailability:', error);
+    console.error('Error checking delivery availability:', error);
     throw error;
   }
 };

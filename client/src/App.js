@@ -33,6 +33,8 @@ import HomePage from './pages/HomePage';
 // Styles
 import './App.css';
 
+import OrderHistory from './features/order/OrderHistory';
+
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
  const { isAuthenticated, isLoading } = useAuth();
@@ -157,6 +159,7 @@ function App() {
        { to: '/dishes', label: 'Signature' },
        { to: '/products', label: 'Shop' },
        { to: '/cart', label: 'Cart' },
+       { to: '/orders', label: 'Orders' },
        { to: '/profile', label: 'Profile' },
        { 
          onClick: handleLogout, 
@@ -253,6 +256,15 @@ function App() {
              element={
                <ProtectedRoute>
                  <Checkout />
+               </ProtectedRoute>
+             } 
+           />
+
+           <Route 
+             path="/orders" 
+             element={
+               <ProtectedRoute>
+                 <OrderHistory />
                </ProtectedRoute>
              } 
            />

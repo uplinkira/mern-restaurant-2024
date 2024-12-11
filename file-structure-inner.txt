@@ -69,7 +69,6 @@ client/src
 │   │   │   └── SearchResults.js
 │   ├── hooks
 │   │   ├── useAuth.js
-│   │   ├── useCart.js
 │   │   └── useProfile.js
 │   ├── index.css
 │   ├── index.js
@@ -95,3 +94,6 @@ client/src
 │   └── utils
 │   │   ├── config.js
 │   │   └── validation.js
+Front-End Architecture
+Authentication - get the JWT token from login using Postman
+Stripe - Regional restrictions

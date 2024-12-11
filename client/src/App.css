@@ -2170,3 +2170,251 @@ textarea:disabled {
 .profile-actions .MuiButton-root:active {
   transform: scale(0.98);
 }
+
+/* Delivery Address Form */
+.delivery-address {
+  margin-bottom: 2rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.delivery-address h4 {
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.address-fields {
+  display: grid;
+  gap: 1rem;
+}
+
+.address-fields .form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.address-fields label {
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.address-fields input {
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.address-fields input:focus {
+  border-color: #4a90e2;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.1);
+}
+
+.address-fields input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.address-fields input::placeholder {
+  color: #aaa;
+}
+
+@media (min-width: 768px) {
+  .address-fields {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Order Status Badges */
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.status-pending {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.status-confirmed {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.status-preparing {
+  background-color: #e0e7ff;
+  color: #3730a3;
+}
+
+.status-ready {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.status-delivering {
+  background-color: #f3e8ff;
+  color: #6b21a8;
+}
+
+.status-completed {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.status-cancelled {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.status-unknown {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+/* Order Actions */
+.order-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.order-actions button {
+  flex: 1;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.order-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.order-actions .btn-primary {
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+}
+
+.order-actions .btn-primary:hover:not(:disabled) {
+  background-color: #2563eb;
+}
+
+.order-actions .btn-secondary {
+  background-color: #ef4444;
+  color: white;
+  border: none;
+}
+
+.order-actions .btn-secondary:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+/* Error Message */
+.error-message {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background-color: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #991b1b;
+  font-size: 0.9em;
+}
+
+/* Order Card */
+.order-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.order-info h3 {
+  margin: 0;
+  color: #1f2937;
+}
+
+.order-date {
+  font-size: 0.9em;
+  color: #6b7280;
+}
+
+.order-items {
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 16px 0;
+  margin-bottom: 16px;
+}
+
+.order-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.order-item:last-child {
+  margin-bottom: 0;
+}
+
+.item-details {
+  flex: 1;
+}
+
+.item-details a {
+  color: #1f2937;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.item-details a:hover {
+  color: #3b82f6;
+}
+
+.item-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 0.9em;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.item-subtotal {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.order-summary {
+  margin-top: 16px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: #4b5563;
+}
+
+.summary-row.total {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+  color: #1f2937;
+  font-size: 1.1em;
+}

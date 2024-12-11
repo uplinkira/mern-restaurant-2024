@@ -13,29 +13,37 @@ import {
 import PaymentForm from '../order/PaymentForm';
 import '../../App.css';
 
-const CheckoutItem = ({ item }) => (
-  <div className="checkout-item card">
-    <div className="item-details">
-      <h3>{item.name}</h3>
-      <div className="item-meta">
-        <span className="category">{item.category}</span>
-        {item.product?.stockStatus === 'low_stock' && (
-          <span className="stock-warning">Limited Stock</span>
+const CheckoutItem = ({ item }) => {
+  // Get the product data
+  const product = item.product || {};
+  const price = product.price || item.price || 0;
+  const name = product.name || item.name || 'Unknown Product';
+  const category = product.category || item.category || '';
+  
+  return (
+    <div className="checkout-item card">
+      <div className="item-details">
+        <h3>{name}</h3>
+        <div className="item-meta">
+          <span className="category">{category}</span>
+          {product.stockStatus === 'low_stock' && (
+            <span className="stock-warning">Limited Stock</span>
+          )}
+        </div>
+        <div className="item-pricing">
+          <p>Price: ¥{price.toFixed(2)}</p>
+          <p>Quantity: {item.quantity}</p>
+          <p className="subtotal">Subtotal: ¥{(price * item.quantity).toFixed(2)}</p>
+        </div>
+        {product.allergens?.length > 0 && (
+          <div className="allergen-info">
+            Contains allergens: {product.allergens.join(', ')}
+          </div>
         )}
       </div>
-      <div className="item-pricing">
-        <p>Price: ¥{item.price.toFixed(2)}</p>
-        <p>Quantity: {item.quantity}</p>
-        <p className="subtotal">Subtotal: ¥{(item.price * item.quantity).toFixed(2)}</p>
-      </div>
-      {item.product?.allergens?.length > 0 && (
-        <div className="allergen-info">
-          Contains allergens: {item.product.allergens.join(', ')}
-        </div>
-      )}
     </div>
-  </div>
-);
+  );
+};
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -77,11 +85,8 @@ const Checkout = () => {
       return;
     }
 
-    if (items.length) {
-      dispatch(addToCart(items));
-      validateCart();
-    }
-  }, [dispatch, items, navigate]);
+    validateCart();
+  }, [items, navigate]);
 
   const handleClearCart = () => {
     if (window.confirm('Are you sure you want to clear your cart?')) {

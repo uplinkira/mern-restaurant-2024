@@ -30,7 +30,7 @@ router.get('/admin/all', async (req, res, next) => {
 router.get('/user/me', getOrdersByUser); // Get current user's orders
 router.get('/user/:userId', async (req, res, next) => {
   // Only allow admin or the user themselves to access
-  if (!req.user.isAdmin && req.user.id !== req.params.userId) {
+  if (!req.user?.isAdmin && req.userId !== req.params.userId) {
     return res.status(403).json({
       success: false,
       message: 'Not authorized to access these orders'
