@@ -1,156 +1,203 @@
 // client/src/features/product/ProductList.js
-
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchProductDetails } from '../../redux/slices/productSlice';
-import { addItemToCart } from '../../redux/slices/cartSlice';
+import {
+ fetchProducts,
+ setFilters,
+ setSorting,
+ setPagination,
+ selectAllProducts,
+ selectProductStatus,
+ selectProductError,
+ selectProductFilters,
+ selectProductPagination,
+ selectAvailableCategories,
+ selectSortOptions
+} from '../../redux/slices/productSlice';
+import {
+  addToCart,
+  selectCartStatus
+} from '../../redux/slices/cartSlice';
 import '../../App.css';
 
-const ProductDetails = () => {
-  const { slug } = useParams();
-  const dispatch = useDispatch();
-  const [quantity, setQuantity] = useState(1);
+// Filter Section Component
+const FilterSection = ({ categories, currentCategory, onCategoryChange }) => (
+ <div className="filters-container">
+   <div className="filter-buttons">
+     {categories.map(category => (
+       <button
+         key={category}
+         className={`filter-btn ${currentCategory === category ? 'active' : ''}`}
+         onClick={() => onCategoryChange(category)}
+       >
+         {category}
+       </button>
+     ))}
+   </div>
+ </div>
+);
 
-  const product = useSelector((state) => state.products.currentProduct);
-  const status = useSelector((state) => state.products.status);
-  const error = useSelector((state) => state.products.error);
+// Sorting Section Component
+const SortingSection = ({ options, currentSort, onSortChange }) => (
+ <div className="sorting-section">
+   <select
+     value={`${currentSort.sortBy}-${currentSort.order}`}
+     onChange={(e) => {
+       const [sortBy, order] = e.target.value.split('-');
+       onSortChange({ sortBy, order });
+     }}
+     className="form-input"
+   >
+     {options.map(option => (
+       <option 
+         key={`${option.value}-${option.order}`}
+         value={`${option.value}-${option.order}`}
+       >
+         {option.label}
+       </option>
+     ))}
+   </select>
+ </div>
+);
 
-  useEffect(() => {
-    if (slug) {
-      dispatch(fetchProductDetails(slug));
-    }
-  }, [dispatch, slug]);
+// Product Grid Component
+const ProductGrid = ({ products, onAddToCart }) => (
+ <div className="card-grid">
+   {products.map(product => (
+     <div key={product.slug} className="card">
+       <Link to={`/product/${product.slug}`} className="product-link">
+         <h3>{product.name}</h3>
+         <div className="product-meta">
+           <span className="category">{product.category}</span>
+           {product.isFeatured && (
+             <span className="featured-badge">Featured</span>
+           )}
+         </div>
+         <p className="description">{product.description}</p>
+         <div className="price-info">
+           <span className="price">¥{product.price.toFixed(2)}</span>
+         </div>
+       </Link>
+       <div className="product-actions">
+         {!product.availableForDelivery ? (
+           <p className="availability-notice">In-store purchase only</p>
+         ) : (
+           <button
+             onClick={() => onAddToCart(product)}
+             className="btn add-to-cart-btn"
+           >
+             Add to Cart
+           </button>
+         )}
+       </div>
+     </div>
+   ))}
+ </div>
+);
 
-  const handleAddToCart = () => {
-    if (product) {
-      dispatch(
-        addItemToCart({
-          productId: product._id,
-          quantity,
-          price: product.price,
-          name: product.name,
-        })
-      );
-    }
-  };
+// Pagination Component
+const Pagination = ({ pagination, onChange }) => (
+ <div className="pagination">
+   <button
+     className="btn"
+     onClick={() => onChange(pagination.currentPage - 1)}
+     disabled={pagination.currentPage === 1}
+   >
+     Previous
+   </button>
+   <span className="page-info">
+     Page {pagination.currentPage} of {pagination.totalPages}
+   </span>
+   <button
+     className="btn"
+     onClick={() => onChange(pagination.currentPage + 1)}
+     disabled={pagination.currentPage === pagination.totalPages}
+   >
+     Next
+   </button>
+ </div>
+);
 
-  // Handling different states of the component
-  if (status === 'loading') {
-    return <div className="loading">Loading product details...</div>;
-  }
+// Main ProductList Component
+const ProductList = () => {
+ const dispatch = useDispatch();
+ const products = useSelector(selectAllProducts);
+ const status = useSelector(selectProductStatus);
+ const error = useSelector(selectProductError);
+ const filters = useSelector(selectProductFilters);
+ const pagination = useSelector(selectProductPagination);
+ const categories = useSelector(selectAvailableCategories);
+ const sortOptions = useSelector(selectSortOptions);
 
-  if (status === 'failed') {
-    return <div className="error">Error: {error}</div>;
-  }
+ useEffect(() => {
+   dispatch(fetchProducts({
+     page: pagination.currentPage,
+     limit: pagination.itemsPerPage,
+     category: filters.category === 'All' ? '' : filters.category,
+     sortBy: filters.sortBy,
+     order: filters.order
+   }));
+ }, [dispatch, pagination.currentPage, filters.category, filters.sortBy, filters.order]);
 
-  if (!product || Object.keys(product).length === 0) {
-    return <div className="error">Product not found</div>;
-  }
+ const handleCategoryChange = (category) => {
+   dispatch(setFilters({ category }));
+ };
 
-  return (
-    <div className="product-details">
-      <div className="product-header card">
-        <h1>{product.name}</h1>
-        <div className="product-meta">
-          <span className="category">{product.category}</span>
-          {product.isFeatured && (
-            <span className="featured-badge">Featured Product</span>
-          )}
-        </div>
-        <p className="description">{product.description}</p>
-      </div>
+ const handleSortChange = (sorting) => {
+   dispatch(setSorting(sorting));
+ };
 
-      <div className="details-grid">
-        <div className="info-card card">
-          <div className="price-info">
-            <h2>Price</h2>
-            <span className="price">¥{product.price.toFixed(2)}</span>
-          </div>
-          <div className="quantity-selector">
-            <label htmlFor="quantity">Quantity:</label>
-            <select
-              id="quantity"
-              value={quantity}
-              onChange={(e) => setQuantity(Number(e.target.value))}
-            >
-              {[1, 2, 3, 4, 5].map((num) => (
-                <option key={num} value={num}>
-                  {num}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            onClick={handleAddToCart}
-            className="btn add-to-cart-btn"
-            disabled={!product.availableForDelivery}
-          >
-            Add to Cart
-          </button>
-          {!product.availableForDelivery && (
-            <p className="availability-notice">
-              This product is only available for in-store purchase
-            </p>
-          )}
-        </div>
+ const handlePageChange = (newPage) => {
+   dispatch(setPagination({ currentPage: newPage }));
+ };
 
-        {(product.ingredients?.length > 0 || product.allergens?.length > 0) && (
-          <div className="ingredients-info card">
-            {product.ingredients?.length > 0 && (
-              <div className="ingredients-section">
-                <h2>Ingredients</h2>
-                <div className="ingredients-list">
-                  {product.ingredients.map((ingredient, index) => (
-                    <span key={index} className="ingredient-tag">
-                      {ingredient}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {product.allergens?.length > 0 && (
-              <div className="allergens-section">
-                <h2>Allergen Information</h2>
-                <div className="allergens-list">
-                  {product.allergens.map((allergen, index) => (
-                    <span key={index} className="allergen-tag">
-                      {allergen}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+ const handleAddToCart = async (product, quantity = 1) => {
+   try {
+     await dispatch(addToCart({ product, quantity })).unwrap();
+   } catch (error) {
+   }
+ };
 
-        {product.caution && (
-          <div className="caution-card card">
-            <h2>Usage Information</h2>
-            <p className="caution-text">{product.caution}</p>
-          </div>
-        )}
-      </div>
+ if (status === 'loading') {
+   return <div className="loading">Loading products...</div>;
+ }
 
-      {product.relatedProducts?.length > 0 && (
-        <div className="related-products card">
-          <h2>You Might Also Like</h2>
-          <div className="related-grid">
-            {product.relatedProducts.map((relatedProduct) => (
-              <Link
-                key={relatedProduct.slug}
-                to={`/product/${relatedProduct.slug}`}
-                className="related-product-card"
-              >
-                <h4>{relatedProduct.name}</h4>
-                <span className="price">¥{relatedProduct.price.toFixed(2)}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+ if (status === 'failed') {
+   return <div className="error">Error: {error}</div>;
+ }
+
+ return (
+   <div className="product-list">
+     <div className="product-list-header">
+       <FilterSection
+         categories={categories}
+         currentCategory={filters.category}
+         onCategoryChange={handleCategoryChange}
+       />
+       <SortingSection
+         options={sortOptions}
+         currentSort={{ sortBy: filters.sortBy, order: filters.order }}
+         onSortChange={handleSortChange}
+       />
+     </div>
+
+     {products.length === 0 ? (
+       <div className="no-products">No products found</div>
+     ) : (
+       <>
+         <ProductGrid 
+           products={products}
+           onAddToCart={handleAddToCart}
+         />
+         <Pagination 
+           pagination={pagination}
+           onChange={handlePageChange}
+         />
+       </>
+     )}
+   </div>
+ );
 };
 
-export default ProductDetails;
+export default ProductList;

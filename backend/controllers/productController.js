@@ -1,174 +1,208 @@
+// backend/controllers/productController.js
 const Product = require('../models/Product');
 const Dish = require('../models/Dish');
 const Restaurant = require('../models/Restaurant');
 
-// Middleware for pagination
+// Pagination middleware with default limit of 8
 const paginate = (req, res, next) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
-  const limit = Math.min(parseInt(req.query.limit) || 10, 100); // Limit results to a maximum of 100
+  const limit = Math.min(parseInt(req.query.limit) || 8, 100);
   req.pagination = { skip: (page - 1) * limit, limit, page };
   next();
 };
 
-// Utility for standardized responses
+// Response utilities
 const successResponse = (res, data, meta = {}) => {
   res.status(200).json({ success: true, data, meta });
 };
 
 const errorResponse = (res, message, error, statusCode = 500) => {
   console.error(message, error);
-  res.status(statusCode).json({ success: false, message, error: error?.message || 'An error occurred' });
+  res.status(statusCode).json({ 
+    success: false, 
+    message, 
+    error: error?.message || 'An error occurred' 
+  });
 };
 
-// **GET all products with optional pagination and search**
+// GET all products with enhanced filtering
 const getAllProducts = async (req, res) => {
-  const { search = '', category } = req.query;
+  const { 
+    search = '', 
+    category = '',
+    sortBy = 'createdAt',
+    order = 'desc',
+    availability = 'all',
+    featured = 'false'
+  } = req.query;
   const { skip, limit, page } = req.pagination;
 
   try {
     const query = {};
 
+    // Search filter
     if (search.trim()) {
-      const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); // Escape special characters
+      const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
       query.$or = [{ name: regex }, { description: regex }, { category: regex }];
     }
 
-    if (category) query.category = category;
+    // Category filter
+    if (category && category !== 'All') {
+      query.category = category;
+    }
+
+    // Availability filter
+    if (availability === 'delivery') {
+      query.availableForDelivery = true;
+    }
+
+    // Featured products filter
+    if (featured === 'true') {
+      query.isFeatured = true;
+    }
+
+    // Sort configuration
+    const sortOptions = {};
+    if (sortBy === 'price') {
+      sortOptions.price = order === 'desc' ? -1 : 1;
+    } else {
+      sortOptions[sortBy] = order === 'desc' ? -1 : 1;
+    }
 
     const [products, total] = await Promise.all([
       Product.find(query)
         .skip(skip)
         .limit(limit)
-        .sort({ createdAt: -1 })
-        .populate('relatedDishes', 'name slug')
-        .populate('relatedRestaurants', 'name slug'),
-      Product.countDocuments(query),
+        .sort(sortOptions)
+        .select('name description category price imageUrls slug isFeatured availableForDelivery caution')
+        .lean(),
+      Product.countDocuments(query)
     ]);
 
-    successResponse(res, products, { total, page, limit });
+    successResponse(res, products, { 
+      total, 
+      page, 
+      limit,
+      totalPages: Math.ceil(total / limit),
+      currentCategory: category || 'All',
+      currentSort: { field: sortBy, order }
+    });
   } catch (error) {
     errorResponse(res, 'Error fetching products', error);
   }
 };
 
-// **GET a single product by slug**
+// GET single product with optimized query
 const getProductBySlug = async (req, res) => {
   const { slug } = req.params;
+  const { includeRelated = 'true' } = req.query;
 
   try {
-    const product = await Product.findOne({ slug });
+    const query = Product.findOne({ slug })
+      .select('name description category price imageUrls slug isFeatured availableForDelivery ingredients allergens caution');
 
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
+    if (includeRelated === 'true') {
+      query
+        .populate('relatedDishes', 'name slug ingredients allergens price isSignatureDish')
+        .populate('relatedRestaurants', 'name slug cuisineType');
     }
 
-    successResponse(res, product);
+    const product = await query.lean();
+
+    if (!product) {
+      return errorResponse(res, 'Product not found', null, 404);
+    }
+
+    // Get related products
+    let relatedProducts = [];
+    if (includeRelated === 'true') {
+      relatedProducts = await Product.find({
+        category: product.category,
+        slug: { $ne: product.slug }
+      })
+      .select('name slug price isFeatured')
+      .limit(4)
+      .lean();
+    }
+
+    successResponse(res, { ...product, relatedProducts });
   } catch (error) {
-    errorResponse(res, 'Error fetching product by slug', error);
+    errorResponse(res, 'Error fetching product', error);
   }
 };
 
-// Helper function to validate related entities
-const validateRelatedEntities = async (dishSlugs, restaurantSlugs) => {
+// Optimized related entities validation
+const validateRelatedEntities = async (dishSlugs = [], restaurantSlugs = []) => {
+  if (!dishSlugs.length && !restaurantSlugs.length) {
+    return { dishes: [], restaurants: [] };
+  }
+
   const [dishes, restaurants] = await Promise.all([
-    Dish.find({ slug: { $in: dishSlugs } }),
-    Restaurant.find({ slug: { $in: restaurantSlugs } }),
+    dishSlugs.length ? Dish.find({ slug: { $in: dishSlugs } }).select('slug').lean() : [],
+    restaurantSlugs.length ? Restaurant.find({ slug: { $in: restaurantSlugs } }).select('slug').lean() : []
   ]);
 
-  if (dishes.length !== dishSlugs.length) {
+  if (dishSlugs.length && dishes.length !== dishSlugs.length) {
     throw new Error('Some related dishes not found');
   }
 
-  if (restaurants.length !== restaurantSlugs.length) {
+  if (restaurantSlugs.length && restaurants.length !== restaurantSlugs.length) {
     throw new Error('Some related restaurants not found');
   }
 
-  return { dishes, restaurants };
+  return {
+    dishes: dishes.map(dish => dish.slug),
+    restaurants: restaurants.map(restaurant => restaurant.slug)
+  };
 };
 
-// **POST create a new product**
+// Rest of the controller methods remain the same but with lean() optimization
 const createProduct = async (req, res) => {
   const {
-    name,
-    description,
-    category,
-    ingredients,
-    allergens,
-    price,
-    isFeatured,
-    availableForDelivery,
-    caution,
-    slug,
-    imageUrls,
+    name, description, category, ingredients, allergens,
+    price, isFeatured, availableForDelivery, caution,
+    slug, imageUrls,
   } = req.body;
 
   try {
     const product = new Product({
-      name,
-      description,
-      category,
-      ingredients,
-      allergens,
-      price,
-      isFeatured,
-      availableForDelivery,
-      caution,
-      slug,
-      imageUrls,
+      name, description, category, ingredients,
+      allergens, price, isFeatured, availableForDelivery,
+      caution, slug, imageUrls,
     });
 
     await product.save();
-    successResponse(res, product, { message: 'Product created successfully' });
+    successResponse(res, product.toObject(), { message: 'Product created successfully' });
   } catch (error) {
     errorResponse(res, 'Error creating product', error);
   }
 };
 
-// **PUT update a product by slug**
 const updateProduct = async (req, res) => {
   const { slug } = req.params;
-  const {
-    name,
-    description,
-    category,
-    ingredients,
-    allergens,
-    price,
-    isFeatured,
-    availableForDelivery,
-    caution,
-    relatedDishes = [],
-    relatedRestaurants = [],
-    imageUrls,
-  } = req.body;
+  const updateData = { ...req.body };
+  delete updateData.slug; // Prevent slug modification
 
   try {
-    const { dishes, restaurants } = await validateRelatedEntities(relatedDishes, relatedRestaurants);
+    if (updateData.relatedDishes || updateData.relatedRestaurants) {
+      const { dishes, restaurants } = await validateRelatedEntities(
+        updateData.relatedDishes || [],
+        updateData.relatedRestaurants || []
+      );
+      updateData.relatedDishes = dishes;
+      updateData.relatedRestaurants = restaurants;
+    }
 
     const updatedProduct = await Product.findOneAndUpdate(
       { slug },
-      {
-        name,
-        description,
-        category,
-        ingredients,
-        allergens,
-        price,
-        isFeatured,
-        availableForDelivery,
-        caution,
-        relatedDishes: dishes.map((dish) => dish.slug),
-        relatedRestaurants: restaurants.map((restaurant) => restaurant.slug),
-        imageUrls,
-      },
+      updateData,
       { new: true }
-    );
+    )
+    .select('name description category price imageUrls slug isFeatured availableForDelivery ingredients allergens caution')
+    .lean();
 
     if (!updatedProduct) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
+      return errorResponse(res, 'Product not found', null, 404);
     }
 
     successResponse(res, updatedProduct, { message: 'Product updated successfully' });
@@ -177,31 +211,28 @@ const updateProduct = async (req, res) => {
   }
 };
 
-// **DELETE a product by slug**
 const deleteProduct = async (req, res) => {
   const { slug } = req.params;
 
   try {
-    const product = await Product.findOneAndDelete({ slug });
-
+    const product = await Product.findOneAndDelete({ slug }).lean();
     if (!product) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
+      return errorResponse(res, 'Product not found', null, 404);
     }
-
     successResponse(res, product, { message: 'Product deleted successfully' });
   } catch (error) {
     errorResponse(res, 'Error deleting product', error);
   }
 };
 
-// **Search products by name, description, or category**
+// Optimized search with lean()
 const searchProducts = async (req, res) => {
   const { q } = req.query;
   const { skip, limit, page } = req.pagination;
 
   try {
-    if (!q || q.trim() === '') {
-      return res.status(400).json({ success: false, message: 'Search query is required' });
+    if (!q?.trim()) {
+      return errorResponse(res, 'Search query is required', null, 400);
     }
 
     const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
@@ -211,14 +242,16 @@ const searchProducts = async (req, res) => {
       })
         .skip(skip)
         .limit(limit)
-        .sort({ createdAt: -1 }),
+        .sort({ createdAt: -1 })
+        .select('name description category price imageUrls slug isFeatured')
+        .lean(),
       Product.countDocuments({
         $or: [{ name: regex }, { description: regex }, { category: regex }],
-      }),
+      })
     ]);
 
     if (!products.length) {
-      return res.status(404).json({ success: false, message: 'No products found matching your search' });
+      return errorResponse(res, 'No products found matching your search', null, 404);
     }
 
     successResponse(res, products, { total, page, limit });
@@ -227,11 +260,8 @@ const searchProducts = async (req, res) => {
   }
 };
 
-// Middleware exports
-const applyPagination = paginate;
-
 module.exports = {
-  applyPagination,
+  applyPagination: paginate,
   getAllProducts,
   getProductBySlug,
   createProduct,

@@ -1,105 +1,140 @@
 // backend/models/Product.js
 const mongoose = require('mongoose');
 
-// Define the Product schema
-const ProductSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 100,
-    },
-    description: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 500,
-    },
-    category: {
-      type: String,
-      required: true,
-      trim: true,
-      enum: ['Food', 'Drink', 'Snack', 'Condiment', 'Other'],
-    },
-    ingredients: [{
-      type: String,
-      trim: true,
-    }],
-    allergens: [{
-      type: String,
-      trim: true,
-    }],
-    price: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    isFeatured: {
-      type: Boolean,
-      default: false,
-    },
-    availableForDelivery: {
-      type: Boolean,
-      default: true,
-    },
-    caution: {
-      type: String,
-      trim: true,
-      maxlength: 200,
-    },
-    slug: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-    },
-    imageUrls: [{
-      type: String,
-      trim: true,
-      match: [/^https?:\/\/.+/, 'Please enter a valid URL'],
-    }],
+const ProductSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: [true, 'Product name is required'],
+    trim: true,
+    maxlength: [100, 'Product name cannot exceed 100 characters']
   },
-  {
-    timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
-  }
-);
+  slug: {
+    type: String,
+    unique: true,
+    required: true,
+    trim: true,
+    index: true
+  },
+  description: {
+    type: String,
+    required: [true, 'Product description is required'],
+    trim: true,
+    maxlength: [2000, 'Description cannot exceed 2000 characters']
+  },
+  price: {
+    type: Number,
+    required: [true, 'Product price is required'],
+    min: [0, 'Price cannot be negative']
+  },
+  category: {
+    type: String,
+    required: [true, 'Product category is required'],
+    enum: ['Food', 'Drink', 'Snack', 'Condiment', 'Other']
+  },
+  ingredients: [{
+    type: String,
+    trim: true
+  }],
+  allergens: [{
+    type: String,
+    trim: true
+  }],
+  stockStatus: {
+    type: String,
+    enum: ['in_stock', 'low_stock', 'out_of_stock'],
+    default: 'in_stock',
+    index: true
+  },
+  availableForDelivery: {
+    type: Boolean,
+    default: true,
+    index: true
+  },
+  isFeatured: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  caution: {
+    type: String,
+    trim: true,
+    maxlength: 200
+  },
+  imageUrls: [{
+    type: String,
+    trim: true,
+    match: [/^https?:\/\/.+/, 'Please enter a valid URL']
+  }],
+  relatedDishes: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Dish'
+  }],
+  relatedRestaurants: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Restaurant'
+  }]
+}, {
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
 
-// 只保留必要的索引
-ProductSchema.index({ name: 'text', description: 'text', category: 1, price: 1 });
+// 组合索引优化
+ProductSchema.index({ 
+  name: 'text', 
+  description: 'text',
+  category: 1,
+  price: 1,
+  stockStatus: 1,
+  isFeatured: 1,
+  availableForDelivery: 1
+});
 
 // 虚拟字段 - 格式化价格
 ProductSchema.virtual('formattedPrice').get(function() {
   return `¥${this.price.toFixed(2)}`;
 });
 
-// 保留 slug 唯一性检查
-ProductSchema.pre('save', async function(next) {
-  if (this.isNew || this.isModified('slug')) {
-    const slugRegEx = new RegExp(`^(${this.slug})((-[0-9]*)?$)`, 'i');
-    const productsWithSlug = await this.constructor.find({ slug: slugRegEx });
-    if (productsWithSlug.length > 0) {
-      this.slug = `${this.slug}-${productsWithSlug.length + 1}`;
-    }
+// 虚拟字段 - 状态显示
+ProductSchema.virtual('statusDisplay').get(function() {
+  if (!this.availableForDelivery) return 'In-Store Only';
+  if (this.stockStatus === 'out_of_stock') return 'Out of Stock';
+  if (this.stockStatus === 'low_stock') return 'Low Stock';
+  return 'Available';
+});
+
+// 实例方法 - 更新库存状态
+ProductSchema.methods.updateStockStatus = function(status) {
+  if (!['in_stock', 'low_stock', 'out_of_stock'].includes(status)) {
+    throw new Error('Invalid stock status');
   }
-  next();
-});
-
-// 更新时间戳
-ProductSchema.pre('findOneAndUpdate', function(next) {
-  this.set({ updatedAt: Date.now() });
-  next();
-});
-
-// 只保留必要的静态方法
-ProductSchema.statics.findFeatured = function() {
-  return this.find({ isFeatured: true });
+  this.stockStatus = status;
+  return this.save();
 };
 
-ProductSchema.statics.findByCategory = function(category) {
-  return this.find({ category });
+// 静态方法 - 查找可配送商品
+ProductSchema.statics.findDeliverable = function() {
+  return this.find({
+    availableForDelivery: true,
+    stockStatus: { $ne: 'out_of_stock' }
+  });
+};
+
+// 静态方法 - 查找精选商品
+ProductSchema.statics.findFeatured = function() {
+  return this.find({ 
+    isFeatured: true,
+    stockStatus: { $ne: 'out_of_stock' }
+  });
+};
+
+// 静态方法 - 按类别查找
+ProductSchema.statics.findByCategory = function(category, options = {}) {
+  const query = category === 'All' ? {} : { category };
+  return this.find({
+    ...query,
+    ...options
+  });
 };
 
 module.exports = mongoose.model('Product', ProductSchema);

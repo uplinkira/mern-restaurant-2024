@@ -152,9 +152,12 @@ function App() {
 
  const navItems = isAuthenticated 
    ? [
-       { to: '/', label: 'Home' },
-       { to: '/profile', label: 'Profile' },
+       { to: '/', label: 'Find' },
+       { to: '/restaurants', label: 'Reservation' },
+       { to: '/dishes', label: 'Signature' },
+       { to: '/products', label: 'Shop' },
        { to: '/cart', label: 'Cart' },
+       { to: '/profile', label: 'Profile' },
        { 
          onClick: handleLogout, 
          label: 'Logout', 
@@ -162,7 +165,10 @@ function App() {
        }
      ]
    : [
-       { to: '/', label: 'Home' },
+       { to: '/', label: 'Find' },
+       { to: '/restaurants', label: 'Reservation' },
+       { to: '/dishes', label: 'Signature' },
+       { to: '/products', label: 'Shop' },
        { to: '/register', label: 'Register' },
        { to: '/login', label: 'Login' }
      ];

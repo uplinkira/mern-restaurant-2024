@@ -13,6 +13,16 @@ const axiosInstance = axios.create({
 // Request interceptor with logging
 axiosInstance.interceptors.request.use(
   (request) => {
+    const token = localStorage.getItem('token');
+    console.log('Request interceptor - Token present:', !!token);
+    
+    if (token) {
+      request.headers.Authorization = `Bearer ${token}`;
+      console.log('Added auth header to request:', request.url);
+    } else {
+      console.log('No token found for request:', request.url);
+    }
+    
     // Log request details
     console.log('🚀 API Request:', {
       url: request.url,
@@ -25,10 +35,6 @@ axiosInstance.interceptors.request.use(
       }
     });
     
-    const token = localStorage.getItem('token');
-    if (token) {
-      request.headers.Authorization = `Bearer ${token}`;
-    }
     return request;
   },
   (error) => {
@@ -112,8 +118,9 @@ export const API_ENDPOINTS = {
   CART: '/api/cart',
   CART_ADD: '/api/cart/add',
   CART_UPDATE: '/api/cart/update',
-  CART_REMOVE: (productId) => `/api/cart/remove/${productId}`,
+  CART_REMOVE: '/api/cart/remove',
   CART_CLEAR: '/api/cart/clear',
+  CART_CHECK_DELIVERY: '/api/cart/check-delivery',
 
   // Orders
   ORDERS: '/api/orders',

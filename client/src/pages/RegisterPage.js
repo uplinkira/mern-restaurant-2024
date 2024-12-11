@@ -85,14 +85,20 @@ const RegisterPage = () => {
     }
 
     try {
+      // Add debug logs
+      console.log('Submitting registration data:', formData);
+      
       // Prepare registration data
       const registrationData = {
         ...formData,
         email: formData.email.toLowerCase(),
         phoneNumber: formData.phoneNumber || undefined
       };
-
+      
+      console.log('Prepared registration data:', registrationData);
+      
       const result = await register(registrationData);
+      console.log('Registration result:', result);
       
       if (result.success) {
         // Clear form and navigate to login
@@ -105,15 +111,18 @@ const RegisterPage = () => {
           replace: true
         });
       } else {
+        console.error('Registration failed:', result.error);
         setErrorMessage(result.error || 'Registration failed. Please try again.');
       }
     } catch (error) {
       console.error('Registration error:', error);
-      setErrorMessage(
-        error.response?.data?.message || 
-        error.message || 
-        'Registration failed. Please try again.'
-      );
+      if (error.response?.data?.message) {
+        setErrorMessage(error.response.data.message);
+      } else if (error.message) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage('Registration failed. Please try again.');
+      }
     }
   };
 

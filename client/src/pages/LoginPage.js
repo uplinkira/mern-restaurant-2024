@@ -82,28 +82,30 @@ const LoginPage = () => {
     e.preventDefault();
     setErrorMessage('');
 
-    // Validate form
-    const validationErrors = validateLoginForm(formData);
-    if (Object.keys(validationErrors).length > 0) {
-      setErrorMessage(Object.values(validationErrors).join('. '));
-      return;
-    }
-
     try {
-      const result = await login({
-        ...formData,
-        email: formData.email.toLowerCase()
+      // Validate form
+      const validationErrors = validateLoginForm(formData);
+      if (validationErrors) {
+        const errorMessages = Object.values(validationErrors);
+        setErrorMessage(errorMessages.join('. '));
+        return;
+      }
+
+      // Attempt login
+      const success = await login({
+        email: formData.email.toLowerCase(),
+        password: formData.password
       });
 
-      if (!result.success) {
-        setErrorMessage(result.error || 'Login failed. Please try again.');
+      if (!success) {
+        setErrorMessage('Login failed. Please check your credentials and try again.');
       }
     } catch (error) {
       console.error('Login error:', error);
       setErrorMessage(
         error.response?.data?.message || 
         error.message || 
-        'Login failed. Please try again.'
+        'An error occurred during login. Please try again.'
       );
     }
   };

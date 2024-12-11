@@ -1,165 +1,150 @@
 // client/src/pages/UserProfile.js
-import React, { useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import useAuth from '../hooks/useAuth';
+import React from 'react';
 import useProfile from '../hooks/useProfile';
-import { validateProfileForm } from '../utils/validation';
+import { Button, TextField, Paper, Typography, Box, CircularProgress } from '@mui/material';
 import '../App.css';
 
 const UserProfile = () => {
-  const navigate = useNavigate();
-  const { checkAuth } = useAuth();
   const {
+    profile,
     formData,
-    isEditing,
-    isLoading,
-    error,
-    validationErrors,
     handleInputChange,
-    startEditing,
-    cancelEdit,
     handleSubmit,
-    loadProfile,
+    isEditing,
+    startEditing,
+    cancelEditing,
+    status,
+    error,
+    validationErrors
   } = useProfile();
 
-  const initProfile = useCallback(async () => {
-    if (!checkAuth()) {
-      navigate('/login');
-      return;
-    }
-    loadProfile();
-  }, [checkAuth, navigate, loadProfile]);
+  if (status === 'loading' && !profile) {
+    return (
+      <div className="profile-loading">
+        <CircularProgress />
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    initProfile();
-  }, [initProfile]);
-
-  const formFields = [
-    { name: 'firstName', label: 'First Name', type: 'text', required: true },
-    { name: 'lastName', label: 'Last Name', type: 'text', required: true },
-    { name: 'email', label: 'Email', type: 'email', required: true },
-    { name: 'phoneNumber', label: 'Phone Number', type: 'tel' },
-    { name: 'address', label: 'Address', type: 'text' },
-  ];
-
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    await handleSubmit(validateProfileForm);
-  };
-
-  if (isLoading) {
-    return <div className="loading-spinner">Loading...</div>;
+  if (error) {
+    return (
+      <div className="profile-error">
+        <Typography variant="h6">{error}</Typography>
+      </div>
+    );
   }
 
   return (
     <div className="profile-container">
-      <div className="profile-content">
-        <h2>Profile Settings</h2>
+      <div className="profile-header">
+        <Typography variant="h4" component="h1">Profile Settings</Typography>
+        <Typography variant="body1" color="textSecondary">
+          Manage your personal information
+        </Typography>
+      </div>
+      
+      <Paper elevation={3} className="profile-section">
+        <form onSubmit={handleSubmit} className="profile-form">
+          <TextField
+            label="First Name"
+            name="firstName"
+            value={formData.firstName}
+            onChange={handleInputChange}
+            disabled={!isEditing}
+            error={!!validationErrors?.firstName}
+            helperText={validationErrors?.firstName}
+            fullWidth
+          />
+          
+          <TextField
+            label="Last Name"
+            name="lastName"
+            value={formData.lastName}
+            onChange={handleInputChange}
+            disabled={!isEditing}
+            error={!!validationErrors?.lastName}
+            helperText={validationErrors?.lastName}
+            fullWidth
+          />
+          
+          <TextField
+            label="Email"
+            name="email"
+            type="email"
+            value={formData.email}
+            onChange={handleInputChange}
+            disabled={!isEditing}
+            error={!!validationErrors?.email}
+            helperText={validationErrors?.email}
+            fullWidth
+          />
+          
+          <TextField
+            label="Phone Number"
+            name="phoneNumber"
+            value={formData.phoneNumber}
+            onChange={handleInputChange}
+            disabled={!isEditing}
+            error={!!validationErrors?.phoneNumber}
+            helperText={validationErrors?.phoneNumber}
+            fullWidth
+          />
+          
+          <TextField
+            label="Address"
+            name="address"
+            value={formData.address}
+            onChange={handleInputChange}
+            disabled={!isEditing}
+            multiline
+            rows={2}
+            fullWidth
+          />
+          
+          <TextField
+            label="Bio"
+            name="bio"
+            value={formData.bio}
+            onChange={handleInputChange}
+            disabled={!isEditing}
+            multiline
+            rows={3}
+            fullWidth
+          />
 
-        {error && <div className="error-message">{error}</div>}
-        {validationErrors && (
-          <div className="error-message">
-            {validationErrors.map((err, index) => (
-              <div key={index}>{err}</div>
-            ))}
-          </div>
-        )}
-
-        <form onSubmit={onSubmit} className="profile-form">
-          <div className="form-section">
-            <h3>Personal Information</h3>
-            {formFields.map(({ name, label, type, required }) => (
-              <div className="form-group" key={name}>
-                <label htmlFor={name}>
-                  {label}
-                  {required && <span className="required">*</span>}
-                </label>
-                <input
-                  type={type}
-                  id={name}
-                  name={name}
-                  value={formData[name]}
-                  onChange={(e) => handleInputChange(e.target.name, e.target.value)}
-                  disabled={!isEditing}
-                  className={`form-input ${!isEditing ? 'disabled' : ''}`}
-                  required={required}
-                />
-              </div>
-            ))}
-          </div>
-
-          <div className="form-section">
-            <h3>Additional Information</h3>
-            <div className="form-group">
-              <label htmlFor="bio">Bio</label>
-              <textarea
-                id="bio"
-                name="bio"
-                value={formData.bio}
-                onChange={(e) => handleInputChange(e.target.name, e.target.value)}
-                disabled={!isEditing}
-                className={`form-input ${!isEditing ? 'disabled' : ''}`}
-                rows="4"
-              />
-            </div>
-          </div>
-
-          {isEditing && (
-            <div className="form-section">
-              <h3>Change Password</h3>
-              <p className="form-note">Leave blank to keep current password</p>
-              <div className="form-group">
-                <label htmlFor="password">New Password</label>
-                <input
-                  type="password"
-                  id="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={(e) => handleInputChange(e.target.name, e.target.value)}
-                  className="form-input"
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="confirmPassword">Confirm Password</label>
-                <input
-                  type="password"
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={(e) => handleInputChange(e.target.name, e.target.value)}
-                  className="form-input"
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="form-actions">
-            {isEditing ? (
-              <>
-                <button type="submit" className="btn-save" disabled={isLoading}>
-                  {isLoading ? 'Saving...' : 'Save Changes'}
-                </button>
-                <button
-                  type="button"
-                  className="btn-cancel"
-                  onClick={cancelEdit}
-                  disabled={isLoading}
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                className="btn-edit"
+          <div className="profile-actions">
+            {!isEditing ? (
+              <Button
+                variant="contained"
+                color="primary"
                 onClick={startEditing}
+                className="edit-button"
               >
                 Edit Profile
-              </button>
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outlined"
+                  onClick={cancelEditing}
+                  className="cancel-button"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  type="submit"
+                  disabled={status === 'loading'}
+                  className="save-button"
+                >
+                  {status === 'loading' ? <CircularProgress size={24} /> : 'Save Changes'}
+                </Button>
+              </>
             )}
           </div>
         </form>
-      </div>
+      </Paper>
     </div>
   );
 };

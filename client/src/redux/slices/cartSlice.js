@@ -2,30 +2,182 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axiosInstance, { API_ENDPOINTS } from '../../utils/config';
 
-// Async thunk for cart operations
-export const saveCartToServer = createAsyncThunk(
-  'cart/saveCartToServer',
-  async (cartData, { rejectWithValue }) => {
+// Async thunks
+export const fetchCart = createAsyncThunk(
+  'cart/fetchCart',
+  async (_, { rejectWithValue }) => {
     try {
-      const response = await axiosInstance.post(API_ENDPOINTS.CART_ADD, {
-        productSlug: cartData.productId,
-        quantity: cartData.quantity
+      const response = await axiosInstance.get(API_ENDPOINTS.CART);
+      
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to fetch cart');
+      }
+
+      console.log('Fetch cart response:', response.data);
+      
+      // Ensure proper data structure
+      const items = response.data.data.items || [];
+      const validItems = items.filter(item => {
+        if (!item?.product || typeof item?.product?.price !== 'number') {
+          console.warn('Invalid cart item:', item);
+          return false;
+        }
+        return true;
       });
-      return response.data;
+
+      return {
+        items: validItems,
+        total: response.data.data.totalPrice || 0
+      };
     } catch (error) {
-      return rejectWithValue(error.message);
+      console.error('Fetch cart error:', error);
+      return rejectWithValue({
+        message: error.response?.data?.message || error.message || 'Failed to fetch cart'
+      });
     }
   }
 );
 
-export const processOrder = createAsyncThunk(
-  'cart/processOrder',
-  async (orderData, { rejectWithValue }) => {
+export const addToCart = createAsyncThunk(
+  'cart/addToCart',
+  async ({ product, quantity }, { rejectWithValue }) => {
     try {
-      const response = await axiosInstance.post(API_ENDPOINTS.ORDERS, orderData);
+      console.log('Adding to cart:', { product, quantity });
+      
+      if (!product || (!product.id && !product._id)) {
+        throw new Error('Invalid product data: Missing product ID');
+      }
+
+      const response = await axiosInstance.post(API_ENDPOINTS.CART_ADD, {
+        product,
+        quantity
+      });
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to add item to cart');
+      }
+
+      console.log('Add to cart response:', response.data);
+      
+      // Ensure proper data structure
+      const items = response.data.data.items || [];
+      const validItems = items.filter(item => {
+        if (!item?.product || typeof item?.product?.price !== 'number') {
+          console.warn('Invalid cart item:', item);
+          return false;
+        }
+        return true;
+      });
+
+      return {
+        items: validItems,
+        total: response.data.data.totalPrice || 0
+      };
+    } catch (error) {
+      console.error('Add to cart error:', error);
+      return rejectWithValue({
+        message: error.response?.data?.message || error.message || 'Failed to add item to cart'
+      });
+    }
+  }
+);
+
+export const updateCartItem = createAsyncThunk(
+  'cart/updateCartItem',
+  async ({ productId, quantity }, { rejectWithValue }) => {
+    try {
+      console.log('Updating cart item - Request:', {
+        productId,
+        quantity,
+        url: API_ENDPOINTS.CART_UPDATE
+      });
+
+      const response = await axiosInstance.patch(API_ENDPOINTS.CART_UPDATE, {
+        productId,
+        quantity
+      });
+
+      console.log('Update cart item - Response:', response.data);
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to update cart item');
+      }
+
+      return {
+        items: response.data.data.items || [],
+        total: response.data.data.totalPrice || 0
+      };
+    } catch (error) {
+      console.error('Update cart item - Error:', {
+        error,
+        response: error.response?.data,
+        message: error.message
+      });
+      return rejectWithValue({
+        message: error.response?.data?.message || error.message || 'Failed to update cart item'
+      });
+    }
+  }
+);
+
+export const removeFromCart = createAsyncThunk(
+  'cart/removeFromCart',
+  async (productId, { rejectWithValue }) => {
+    try {
+      console.log('Removing from cart - Request:', {
+        productId,
+        url: API_ENDPOINTS.CART_REMOVE
+      });
+      
+      if (!productId) {
+        throw new Error('Invalid product ID');
+      }
+
+      const response = await axiosInstance.delete(`${API_ENDPOINTS.CART_REMOVE}?productId=${productId}`);
+
+      console.log('Remove from cart - Response:', response.data);
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to remove item from cart');
+      }
+      
+      return {
+        items: response.data.data.items || [],
+        total: response.data.data.totalPrice || 0
+      };
+    } catch (error) {
+      console.error('Remove from cart - Error:', {
+        error,
+        response: error.response?.data,
+        message: error.message
+      });
+      return rejectWithValue({
+        message: error.response?.data?.message || error.message || 'Failed to remove item from cart'
+      });
+    }
+  }
+);
+
+export const clearCart = createAsyncThunk(
+  'cart/clearCart',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await axiosInstance.delete(API_ENDPOINTS.CART_CLEAR);
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.message);
+      return rejectWithValue(error.response?.data || { message: error.message });
+    }
+  }
+);
+
+export const checkDeliveryAvailability = createAsyncThunk(
+  'cart/checkDeliveryAvailability',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await axiosInstance.get(API_ENDPOINTS.CART_CHECK_DELIVERY);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || { message: error.message });
     }
   }
 );
@@ -33,130 +185,132 @@ export const processOrder = createAsyncThunk(
 const initialState = {
   items: [],
   total: 0,
-  itemCount: 0,
   status: 'idle',
-  error: null,
-  lastUpdated: null,
-  orderProcessing: false,
-  orderSuccess: false,
-  orderError: null
+  error: null
 };
 
 const cartSlice = createSlice({
   name: 'cart',
   initialState,
   reducers: {
-    addItemToCart: (state, action) => {
-      const { productId, quantity, price, name, category } = action.payload;
-      const existingItem = state.items.find(item => item.productId === productId);
-
-      if (existingItem) {
-        existingItem.quantity += quantity;
-        existingItem.subtotal = existingItem.price * existingItem.quantity;
-      } else {
-        state.items.push({
-          productId,
-          quantity,
-          price,
-          name,
-          category,
-          subtotal: price * quantity
-        });
-      }
-      
-      state.total = state.items.reduce((sum, item) => sum + item.subtotal, 0);
-      state.itemCount = state.items.reduce((count, item) => count + item.quantity, 0);
-      state.lastUpdated = new Date().toISOString();
+    clearError: (state) => {
+      state.error = null;
     },
-
-    removeItemFromCart: (state, action) => {
-      const { productId } = action.payload;
-      state.items = state.items.filter(item => item.productId !== productId);
-      state.total = state.items.reduce((sum, item) => sum + item.subtotal, 0);
-      state.itemCount = state.items.reduce((count, item) => count + item.quantity, 0);
-      state.lastUpdated = new Date().toISOString();
+    setStatus: (state, action) => {
+      state.status = action.payload;
     },
-
-    updateItemQuantity: (state, action) => {
-      const { productId, quantity } = action.payload;
-      const item = state.items.find(item => item.productId === productId);
-      
-      if (item) {
-        item.quantity = quantity;
-        item.subtotal = item.price * quantity;
-        state.total = state.items.reduce((sum, item) => sum + item.subtotal, 0);
-        state.itemCount = state.items.reduce((count, item) => count + item.quantity, 0);
-        state.lastUpdated = new Date().toISOString();
-      }
+    setCartItems: (state, action) => {
+      // Validate items before setting
+      const validItems = action.payload.filter(item => {
+        if (!item?.product || typeof item?.product?.price !== 'number') {
+          console.warn('Invalid cart item:', item);
+          return false;
+        }
+        return true;
+      });
+      state.items = validItems;
     },
-
-    clearCart: (state) => {
-      state.items = [];
-      state.total = 0;
-      state.itemCount = 0;
-      state.lastUpdated = new Date().toISOString();
-      state.orderSuccess = false;
-      state.orderError = null;
+    setCartTotal: (state, action) => {
+      state.total = action.payload;
     },
-
-    resetOrderStatus: (state) => {
-      state.orderProcessing = false;
-      state.orderSuccess = false;
-      state.orderError = null;
+    setError: (state, action) => {
+      state.error = action.payload;
+      state.status = 'failed';
     }
   },
   extraReducers: (builder) => {
     builder
-      // Handle saveCartToServer
-      .addCase(saveCartToServer.pending, (state) => {
+      // Fetch cart
+      .addCase(fetchCart.pending, (state) => {
         state.status = 'loading';
-      })
-      .addCase(saveCartToServer.fulfilled, (state) => {
-        state.status = 'succeeded';
         state.error = null;
       })
-      .addCase(saveCartToServer.rejected, (state, action) => {
+      .addCase(fetchCart.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.items = action.payload.items;
+        state.total = action.payload.total;
+        state.error = null;
+      })
+      .addCase(fetchCart.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload;
+        state.error = action.payload?.message || 'Failed to fetch cart';
       })
-      // Handle processOrder
-      .addCase(processOrder.pending, (state) => {
-        state.orderProcessing = true;
+      // Add to cart
+      .addCase(addToCart.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
       })
-      .addCase(processOrder.fulfilled, (state) => {
-        state.orderProcessing = false;
-        state.orderSuccess = true;
+      .addCase(addToCart.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.items = action.payload.items;
+        state.total = action.payload.total;
+        state.error = null;
+      })
+      .addCase(addToCart.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload?.message || 'Failed to add item to cart';
+      })
+      // Update cart item
+      .addCase(updateCartItem.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addCase(updateCartItem.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.items = action.payload.items;
+        state.total = action.payload.total;
+        state.error = null;
+      })
+      .addCase(updateCartItem.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload?.message || 'Failed to update cart item';
+      })
+      // Remove from cart
+      .addCase(removeFromCart.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addCase(removeFromCart.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.items = action.payload.items;
+        state.total = action.payload.total;
+        state.error = null;
+      })
+      .addCase(removeFromCart.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload?.message || 'Failed to remove item from cart';
+      })
+      // Clear cart
+      .addCase(clearCart.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addCase(clearCart.fulfilled, (state) => {
+        state.status = 'succeeded';
         state.items = [];
         state.total = 0;
-        state.itemCount = 0;
+        state.error = null;
       })
-      .addCase(processOrder.rejected, (state, action) => {
-        state.orderProcessing = false;
-        state.orderSuccess = false;
-        state.orderError = action.payload;
+      .addCase(clearCart.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload?.message || 'Failed to clear cart';
       });
   }
 });
 
 // Export actions
 export const {
-  addItemToCart,
-  removeItemFromCart,
-  updateItemQuantity,
-  clearCart,
-  resetOrderStatus
+  clearError,
+  setStatus,
+  setCartItems,
+  setCartTotal,
+  setError
 } = cartSlice.actions;
 
-// Selectors
+// Export selectors
 export const selectCartItems = (state) => state.cart.items;
 export const selectCartTotal = (state) => state.cart.total;
-export const selectCartItemCount = (state) => state.cart.itemCount;
 export const selectCartStatus = (state) => state.cart.status;
 export const selectCartError = (state) => state.cart.error;
-export const selectOrderStatus = (state) => ({
-  processing: state.cart.orderProcessing,
-  success: state.cart.orderSuccess,
-  error: state.cart.orderError
-});
 
 export default cartSlice.reducer;

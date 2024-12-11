@@ -1,120 +1,97 @@
 // backend/routes/cart.js
 const express = require('express');
 const router = express.Router();
-const Cart = require('../models/Cart');
-const Product = require('../models/Product');
 const { authMiddleware } = require('../middleware/authMiddleware');
+const {
+  getCart,
+  addToCart,
+  updateCartItem,
+  removeFromCart,
+  clearCart,
+  checkDeliveryAvailability
+} = require('../controllers/cartController');
 
-// **GET the authenticated user's cart**
-router.get('/', authMiddleware, async (req, res) => {
-  try {
-    const cart = await Cart.findOne({ user: req.userId }).populate('items.product', 'name slug price imageUrls');
-    if (!cart) {
-      return res.status(404).json({ message: 'Cart not found for this user' });
+// Debug middleware for cart routes
+router.use((req, res, next) => {
+  console.log('Cart route accessed:', {
+    method: req.method,
+    path: req.path,
+    fullPath: req.originalUrl,
+    body: req.body,
+    query: req.query,
+    params: req.params,
+    headers: {
+      'content-type': req.headers['content-type'],
+      'authorization': req.headers['authorization'] ? 'Bearer [REDACTED]' : 'None'
     }
-    res.status(200).json(cart);
-  } catch (error) {
-    console.error('Error fetching user cart:', error);
-    res.status(500).json({ message: 'Failed to fetch cart' });
-  }
+  });
+  next();
 });
 
-// **POST add a product to the cart**
-router.post('/add', authMiddleware, async (req, res) => {
-  const { productSlug, quantity } = req.body;
+// Protect all routes
+router.use(authMiddleware);
 
-  try {
-    const product = await Product.findOne({ slug: productSlug }).select('name price imageUrls');
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-
-    let cart = await Cart.findOne({ user: req.userId });
-    if (!cart) {
-      cart = new Cart({ user: req.userId, items: [], totalPrice: 0 });
-    }
-
-    await cart.addProduct(productSlug, quantity);
-    res.status(200).json(cart);
-  } catch (error) {
-    console.error('Error adding product to cart:', error);
-    res.status(500).json({ message: 'Failed to add product to cart' });
-  }
+// Cart routes with logging
+router.get('/', (req, res, next) => {
+  console.log('GET /api/cart - Request received');
+  getCart(req, res, next);
 });
 
-// **PUT update the quantity of a product in the cart**
-router.put('/update', authMiddleware, async (req, res) => {
-  const { productSlug, quantity } = req.body;
-
-  try {
-    const cart = await Cart.findOne({ user: req.userId });
-    if (!cart) {
-      return res.status(404).json({ message: 'Cart not found' });
-    }
-
-    await cart.updateProductQuantity(productSlug, quantity);
-    res.status(200).json(cart);
-  } catch (error) {
-    console.error('Error updating product quantity in cart:', error);
-    res.status(500).json({ message: 'Failed to update product quantity in cart' });
-  }
+router.post('/add', (req, res, next) => {
+  console.log('POST /api/cart/add - Request received:', req.body);
+  addToCart(req, res, next);
 });
 
-// **DELETE remove a product from the cart**
-router.delete('/remove/:productSlug', authMiddleware, async (req, res) => {
-  const { productSlug } = req.params;
-
-  try {
-    const cart = await Cart.findOne({ user: req.userId });
-    if (!cart) {
-      return res.status(404).json({ message: 'Cart not found' });
-    }
-
-    await cart.removeProduct(productSlug);
-    res.status(200).json({ message: 'Product removed from cart', cart });
-  } catch (error) {
-    console.error('Error removing product from cart:', error);
-    res.status(500).json({ message: 'Failed to remove product from cart' });
-  }
+// Handle both PATCH and PUT requests for update
+router.patch('/update', (req, res, next) => {
+  console.log('PATCH /api/cart/update - Request received:', req.body);
+  updateCartItem(req, res, next);
 });
 
-// **DELETE clear the cart**
-router.delete('/clear', authMiddleware, async (req, res) => {
-  try {
-    const cart = await Cart.findOne({ user: req.userId });
-    if (!cart) {
-      return res.status(404).json({ message: 'Cart not found' });
-    }
-
-    await cart.clearCart();
-    res.status(200).json({ message: 'Cart cleared successfully', cart });
-  } catch (error) {
-    console.error('Error clearing cart:', error);
-    res.status(500).json({ message: 'Failed to clear cart' });
-  }
+router.put('/update', (req, res, next) => {
+  console.log('PUT /api/cart/update - Request received:', req.body);
+  updateCartItem(req, res, next);
 });
 
-// **GET check delivery availability for products in the cart**
-router.get('/check-delivery', authMiddleware, async (req, res) => {
-  try {
-    const cart = await Cart.findOne({ user: req.userId }).populate('items.product', 'name slug availableForDelivery');
-    if (!cart) {
-      return res.status(404).json({ message: 'Cart not found' });
-    }
+// Handle both DELETE methods
+router.delete('/remove', (req, res, next) => {
+  console.log('DELETE /api/cart/remove - Request received:', {
+    body: req.body,
+    query: req.query,
+    params: req.params
+  });
+  removeFromCart(req, res, next);
+});
 
-    const unavailableItems = cart.items.filter(item => !item.product.availableForDelivery);
-    if (unavailableItems.length > 0) {
-      return res.status(200).json({
-        message: 'Some items are unavailable for delivery',
-        unavailableItems,
-      });
-    }
+router.delete('/clear', (req, res, next) => {
+  console.log('DELETE /api/cart/clear - Request received');
+  clearCart(req, res, next);
+});
 
-    res.status(200).json({ message: 'All items are available for delivery' });
-  } catch (error) {
-    console.error('Error checking delivery availability:', error);
-    res.status(500).json({ message: 'Failed to check delivery availability' });
-  }
+router.get('/check-delivery', (req, res, next) => {
+  console.log('GET /api/cart/check-delivery - Request received');
+  checkDeliveryAvailability(req, res, next);
+});
+
+// Add route with URL parameter as fallback
+router.delete('/remove/:productId', (req, res, next) => {
+  console.log('DELETE /api/cart/remove/:productId - Request received:', {
+    params: req.params
+  });
+  removeFromCart(req, res, next);
+});
+
+// Catch-all route for debugging
+router.all('*', (req, res) => {
+  console.log('Unmatched cart route:', {
+    method: req.method,
+    path: req.path,
+    fullPath: req.originalUrl
+  });
+  res.status(404).json({
+    success: false,
+    message: `Cannot ${req.method} ${req.path}`
+  });
 });
 
 module.exports = router;

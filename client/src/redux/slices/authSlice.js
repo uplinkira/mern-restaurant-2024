@@ -4,13 +4,13 @@ import axiosInstance, { API_ENDPOINTS } from '../../utils/config';
 
 // Enhanced auth response handler with better error handling
 const handleAuthResponse = (response) => {
- if (!response.success) {
-   throw new Error(response.message || 'Authentication failed');
+ if (!response.data.success) {
+   throw new Error(response.data.message || 'Authentication failed');
  }
- if (response.data?.token) {
-   localStorage.setItem('token', response.data.token);
+ if (response.data.data?.token) {
+   localStorage.setItem('token', response.data.data.token);
  }
- return response.data;
+ return response.data.data;
 };
 
 // Enhanced error handler
@@ -25,12 +25,15 @@ export const registerUser = createAsyncThunk(
  'auth/registerUser',
  async (userData, { rejectWithValue }) => {
    try {
+     console.log('Sending registration request with data:', userData);
      const response = await axiosInstance.post(API_ENDPOINTS.REGISTER, {
        ...userData,
        email: userData.email.toLowerCase()
      });
+     console.log('Registration response:', response);
      return handleAuthResponse(response);
    } catch (error) {
+     console.error('Registration error in thunk:', error);
      return rejectWithValue(handleAuthError(error));
    }
  }
@@ -111,16 +114,12 @@ const authSlice = createSlice({
  name: 'auth',
  initialState,
  reducers: {
-   clearUser: (state) => {
-     state.user = null;
-     state.token = null;
-     state.isAuthenticated = false;
-     state.status = 'idle';
-     state.error = null;
-     state.lastVerified = null;
-   },
    clearError: (state) => {
      state.error = null;
+   },
+   clearUser: (state) => {
+     state.user = null;
+     state.isAuthenticated = false;
    },
    setAuthStatus: (state, action) => {
      state.status = action.payload;
@@ -226,10 +225,10 @@ const authSlice = createSlice({
 });
 
 export const { 
- clearUser, 
- clearError, 
- setAuthStatus,
- setInitializing 
+  clearUser, 
+  clearError, 
+  setAuthStatus,
+  setInitializing 
 } = authSlice.actions;
 
 // Enhanced selectors
@@ -239,5 +238,13 @@ export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
 export const selectAuthStatus = (state) => state.auth.status;
 export const selectAuthError = (state) => state.auth.error;
 export const selectIsInitializing = (state) => state.auth.isInitializing;
+
+// Combined selector
+export const selectAuthState = (state) => ({
+  isAuthenticated: state.auth.isAuthenticated,
+  user: state.auth.user,
+  status: state.auth.status,
+  error: state.auth.error
+});
 
 export default authSlice.reducer;

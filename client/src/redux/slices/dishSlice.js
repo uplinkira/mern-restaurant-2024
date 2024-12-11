@@ -120,11 +120,15 @@ export const searchDishes = createAsyncThunk(
 
 export const fetchSignatureDishes = createAsyncThunk(
   'dishes/fetchSignatureDishes',
-  async (restaurantSlug, { rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const response = await axiosInstance.get(
-        API_ENDPOINTS.SIGNATURE_DISHES(restaurantSlug)
-      );
+      // 获取所有餐厅的特色菜品
+      const response = await axiosInstance.get(API_ENDPOINTS.DISHES, {
+        params: {
+          isSignature: true,
+          status: 'active'
+        }
+      });
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || error.message);

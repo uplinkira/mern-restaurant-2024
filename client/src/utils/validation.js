@@ -3,107 +3,115 @@
 export const validateProfileForm = (formData) => {
   const errors = {};
 
-  // Validate email
-  if (!validateEmail(formData.email)) {
+  // Validate required fields
+  if (!formData.firstName?.trim()) {
+    errors.firstName = 'First name is required';
+  }
+  if (!formData.lastName?.trim()) {
+    errors.lastName = 'Last name is required';
+  }
+  if (!formData.email?.trim()) {
+    errors.email = 'Email is required';
+  } else if (!validateEmail(formData.email)) {
     errors.email = 'Please enter a valid email address';
   }
 
-  // Validate phone number (if provided)
+  // Validate optional fields
   if (formData.phoneNumber && !validatePhoneNumber(formData.phoneNumber)) {
-    errors.phoneNumber = 'Please provide a valid international phone number';
+    errors.phoneNumber = 'Please provide a valid phone number';
   }
 
-  // Validate first name and last name
-  if (!formData.firstName || formData.firstName.trim() === '') {
-    errors.firstName = 'First name is required';
-  }
-  if (!formData.lastName || formData.lastName.trim() === '') {
-    errors.lastName = 'Last name is required';
-  }
-
-  // Validate password (only if editing)
-  if (formData.password && !validatePassword(formData.password)) {
-    errors.password = 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character';
+  // Password validation
+  if (formData.password) {
+    if (!validatePassword(formData.password)) {
+      errors.password = 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character';
+    }
+    if (formData.password !== formData.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+    }
   }
 
-  // Confirm password (only if editing)
-  if (formData.password && formData.password !== formData.confirmPassword) {
-    errors.confirmPassword = 'Passwords do not match';
-  }
-
-  return errors;
+  return Object.keys(errors).length > 0 ? errors : null;
 };
 
-// Existing exports
+// Email validation
 export const validateEmail = (email) => {
+  if (!email) return false;
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return re.test(String(email).toLowerCase());
 };
 
+// Password validation
 export const validatePassword = (password) => {
+  if (!password) return false;
   const re = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
   return re.test(password);
 };
 
+// Username validation
 export const validateUsername = (username) => {
-  return username.trim().length > 0;
+  return username?.trim().length > 0;
 };
 
+// Phone number validation
 export const validatePhoneNumber = (phoneNumber) => {
+  if (!phoneNumber) return false;
   const re = /^\+?[1-9]\d{1,14}$/;
-  return re.test(phoneNumber);
+  return re.test(phoneNumber.trim());
 };
 
-export const validateForm = (formData) => {
-  const errors = {};
-
-  if (!validateEmail(formData.email)) {
-    errors.email = 'Please enter a valid email address';
-  }
-
-  if (!validatePassword(formData.password)) {
-    errors.password = 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character';
-  }
-
-  if (!validateUsername(formData.username)) {
-    errors.username = 'Username is required';
-  }
-
-  if (formData.phoneNumber && !validatePhoneNumber(formData.phoneNumber)) {
-    errors.phoneNumber = 'Please provide a valid international phone number';
-  }
-
-  if (formData.confirmPassword && formData.password !== formData.confirmPassword) {
-    errors.confirmPassword = 'Passwords do not match';
-  }
-
-  return errors;
-};
-
+// Login form validation
 export const validateLoginForm = (formData) => {
   const errors = {};
 
-  if (!validateEmail(formData.email)) {
+  if (!formData.email?.trim()) {
+    errors.email = 'Email is required';
+  } else if (!validateEmail(formData.email)) {
     errors.email = 'Please enter a valid email address';
   }
 
-  if (!formData.password) {
+  if (!formData.password?.trim()) {
     errors.password = 'Password is required';
   }
 
-  return errors;
+  return Object.keys(errors).length > 0 ? errors : null;
 };
 
+// Registration form validation
 export const validateRegisterForm = (formData) => {
-  const errors = validateForm(formData);
+  const errors = {};
 
-  if (!formData.firstName) {
+  if (!formData.email?.trim()) {
+    errors.email = 'Email is required';
+  } else if (!validateEmail(formData.email)) {
+    errors.email = 'Please enter a valid email address';
+  }
+
+  if (!formData.password?.trim()) {
+    errors.password = 'Password is required';
+  } else if (!validatePassword(formData.password)) {
+    errors.password = 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character';
+  }
+
+  if (!formData.username?.trim()) {
+    errors.username = 'Username is required';
+  }
+
+  if (!formData.firstName?.trim()) {
     errors.firstName = 'First name is required';
   }
 
-  if (!formData.lastName) {
+  if (!formData.lastName?.trim()) {
     errors.lastName = 'Last name is required';
   }
 
-  return errors;
+  if (formData.password !== formData.confirmPassword) {
+    errors.confirmPassword = 'Passwords do not match';
+  }
+
+  if (formData.phoneNumber && !validatePhoneNumber(formData.phoneNumber)) {
+    errors.phoneNumber = 'Please provide a valid phone number';
+  }
+
+  return Object.keys(errors).length > 0 ? errors : null;
 };

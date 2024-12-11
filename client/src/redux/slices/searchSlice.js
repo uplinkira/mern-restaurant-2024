@@ -1,3 +1,4 @@
+// client/src/redux/slices/searchSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axiosInstance, { API_ENDPOINTS } from '../../utils/config';
 

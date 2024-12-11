@@ -10,7 +10,7 @@ import {
   selectProductError,
   clearCurrentProduct
 } from '../../redux/slices/productSlice';
-import { addItemToCart } from '../../redux/slices/cartSlice';
+import { addToCart } from '../../redux/slices/cartSlice';
 import '../../App.css';
 
 const ProductDetails = () => {
@@ -32,15 +32,48 @@ const ProductDetails = () => {
     };
   }, [dispatch, slug]);
 
-  const handleAddToCart = () => {
-    if (product) {
-      dispatch(addItemToCart({
-        productId: product._id,
-        quantity,
+  const handleAddToCart = async (quantity) => {
+    try {
+      console.log('Product data:', product);
+      
+      const productData = {
+        id: product._id,
+        name: product.name,
         price: product.price,
-        name: product.name
-      }));
+        category: product.category,
+        stockStatus: product.stockStatus,
+        availableForDelivery: product.availableForDelivery,
+        allergens: product.allergens || []
+      };
+
+      console.log('Sending product data:', { productData, quantity });
+
+      await dispatch(addToCart({
+        product: productData,
+        quantity
+      })).unwrap();
+    } catch (error) {
+      console.error('Failed to add to cart:', error);
     }
+  };
+
+  const getStockStatusDisplay = (stockStatus) => {
+    switch (stockStatus) {
+      case 'out_of_stock':
+        return <span className="stock-status out-of-stock">Out of Stock</span>;
+      case 'low_stock':
+        return <span className="stock-status low-stock">Low Stock</span>;
+      case 'in_stock':
+        return <span className="stock-status in-stock">In Stock</span>;
+      default:
+        return null;
+    }
+  };
+
+  const isAddToCartDisabled = () => {
+    return !product.availableForDelivery || 
+           product.stockStatus === 'out_of_stock' ||
+           (product.stockStatus === 'low_stock' && quantity > 1);
   };
 
   if (status === 'loading') {
@@ -64,6 +97,7 @@ const ProductDetails = () => {
           {product.isFeatured && (
             <span className="featured-badge">Featured Product</span>
           )}
+          {getStockStatusDisplay(product.stockStatus)}
         </div>
         <p className="description">{product.description}</p>
       </div>
@@ -80,22 +114,37 @@ const ProductDetails = () => {
               id="quantity" 
               value={quantity} 
               onChange={(e) => setQuantity(Number(e.target.value))}
+              disabled={product.stockStatus === 'out_of_stock'}
             >
               {[1, 2, 3, 4, 5].map(num => (
-                <option key={num} value={num}>{num}</option>
+                <option 
+                  key={num} 
+                  value={num}
+                  disabled={product.stockStatus === 'low_stock' && num > 1}
+                >
+                  {num}
+                </option>
               ))}
             </select>
           </div>
           <button 
-            onClick={handleAddToCart}
+            onClick={() => handleAddToCart(quantity)}
             className="btn add-to-cart-btn"
-            disabled={!product.availableForDelivery}
+            disabled={isAddToCartDisabled()}
           >
-            Add to Cart
+            {product.stockStatus === 'out_of_stock' 
+              ? 'Out of Stock' 
+              : 'Add to Cart'
+            }
           </button>
           {!product.availableForDelivery && (
             <p className="availability-notice">
               This product is only available for in-store purchase
+            </p>
+          )}
+          {product.stockStatus === 'low_stock' && (
+            <p className="stock-warning">
+              Limited quantity available
             </p>
           )}
         </div>
@@ -148,7 +197,10 @@ const ProductDetails = () => {
                 className="related-product-card"
               >
                 <h4>{relatedProduct.name}</h4>
-                <span className="price">¥{relatedProduct.price.toFixed(2)}</span>
+                <div className="product-info">
+                  <span className="price">¥{relatedProduct.price.toFixed(2)}</span>
+                  {getStockStatusDisplay(relatedProduct.stockStatus)}
+                </div>
               </Link>
             ))}
           </div>

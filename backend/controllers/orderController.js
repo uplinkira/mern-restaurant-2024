@@ -1,170 +1,203 @@
 const Order = require('../models/Order');
+const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 
-// Standardized response handlers
-const successResponse = (res, data, meta = {}) => {
-  res.status(200).json({ success: true, data, meta });
+// Helper function to handle async route handlers
+const handleAsync = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-const errorResponse = (res, message, error, statusCode = 500) => {
-  console.error(message, error);
-  res.status(statusCode).json({ success: false, message, error: error?.message || 'An error occurred' });
-};
+// Get all orders (admin only)
+exports.getAllOrders = handleAsync(async (req, res) => {
+  const orders = await Order.find()
+    .populate('user', 'name email')
+    .sort('-createdAt');
 
-// Middleware for pagination
-const paginate = (req, res, next) => {
-  const page = Math.max(1, parseInt(req.query.page) || 1);
-  const limit = Math.min(parseInt(req.query.limit) || 10, 100); // Limit results per page
-  req.pagination = {
-    skip: (page - 1) * limit,
-    limit,
-    page,
-  };
-  next();
-};
+  res.status(200).json({
+    success: true,
+    data: orders
+  });
+});
 
-// Get all orders with optional pagination
-const getAllOrders = async (req, res) => {
-  const { skip, limit, page } = req.pagination;
+// Get orders by user ID
+exports.getOrdersByUser = handleAsync(async (req, res) => {
+  const userId = req.params.userId || req.user.id;
+  const orders = await Order.find({ user: userId })
+    .sort('-createdAt');
 
-  try {
-    const orders = await Order.find()
-      .populate('user', 'username email') // Populate user details
-      .populate('items.product', 'name price') // Populate product details
-      .skip(skip)
-      .limit(limit)
-      .sort({ createdAt: -1 });
+  res.status(200).json({
+    success: true,
+    data: orders
+  });
+});
 
-    const total = await Order.countDocuments();
-    successResponse(res, orders, { total, page, limit });
-  } catch (error) {
-    errorResponse(res, 'Error fetching orders', error);
-  }
-};
+// Create new order
+exports.createOrder = handleAsync(async (req, res) => {
+  const {
+    deliveryAddress,
+    paymentMethod,
+    deliveryInstructions
+  } = req.body;
 
-// Get a single order by ID
-const getOrderById = async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const order = await Order.findById(id)
-      .populate('user', 'username email')
-      .populate('items.product', 'name price');
-
-    if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
-    }
-
-    successResponse(res, order);
-  } catch (error) {
-    errorResponse(res, 'Error fetching order by ID', error);
-  }
-};
-
-// Get orders for a specific user
-const getOrdersByUser = async (req, res) => {
-  const { userId } = req.params;
-  const { skip, limit, page } = req.pagination;
-
-  try {
-    const orders = await Order.find({ user: userId })
-      .populate('items.product', 'name price')
-      .skip(skip)
-      .limit(limit)
-      .sort({ createdAt: -1 });
-
-    const total = await Order.countDocuments({ user: userId });
-    successResponse(res, orders, { total, page, limit });
-  } catch (error) {
-    errorResponse(res, 'Error fetching orders for user', error);
-  }
-};
-
-// Create a new order
-const createOrder = async (req, res) => {
-  const { userId, items } = req.body;
-
-  try {
-    if (!items || items.length === 0) {
-      return res.status(400).json({ success: false, message: 'Order must contain items' });
-    }
-
-    let totalAmount = 0;
-
-    // Validate and calculate order items
-    const orderItems = await Promise.all(
-      items.map(async (item) => {
-        const product = await Product.findById(item.product);
-        if (!product) {
-          throw new Error(`Product with ID "${item.product}" not found`);
-        }
-
-        totalAmount += product.price * item.quantity;
-        return {
-          product: product._id,
-          quantity: item.quantity,
-          price: product.price,
-        };
-      })
-    );
-
-    const order = new Order({
-      user: userId,
-      items: orderItems,
-      totalAmount,
+  // Validate required fields
+  if (!deliveryAddress || !paymentMethod) {
+    return res.status(400).json({
+      success: false,
+      message: 'Delivery address and payment method are required'
     });
-
-    await order.save();
-    successResponse(res, order, { message: 'Order created successfully' });
-  } catch (error) {
-    errorResponse(res, 'Error creating order', error);
   }
-};
 
-// Update an order status by ID
-const updateOrderStatus = async (req, res) => {
-  const { id } = req.params;
+  // Get user's cart
+  const cart = await Cart.findByUser(req.user.id);
+  if (!cart || cart.items.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Cart is empty'
+    });
+  }
+
+  // Check delivery availability
+  const unavailableItems = await cart.checkDeliveryAvailability();
+  if (unavailableItems.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Some items are not available for delivery',
+      data: { unavailableItems }
+    });
+  }
+
+  // Create order from cart
+  const order = await Order.create({
+    user: req.user.id,
+    items: cart.items,
+    totalPrice: cart.totalPrice,
+    deliveryAddress,
+    paymentMethod,
+    deliveryInstructions,
+    restaurant: cart.items[0].product.restaurant // Assuming all items are from same restaurant
+  });
+
+  // Clear cart after successful order creation
+  await cart.clearCart();
+
+  res.status(201).json({
+    success: true,
+    data: order
+  });
+});
+
+// Get all orders for current user
+exports.getOrders = handleAsync(async (req, res) => {
+  const orders = await Order.find({ user: req.user.id })
+    .sort('-createdAt');
+
+  res.status(200).json({
+    success: true,
+    data: orders
+  });
+});
+
+// Get single order by ID
+exports.getOrderById = handleAsync(async (req, res) => {
+  const order = await Order.findById(req.params.orderId)
+    .populate('user', 'name email')
+    .populate('restaurant', 'name address');
+
+  if (!order) {
+    return res.status(404).json({
+      success: false,
+      message: 'Order not found'
+    });
+  }
+
+  // Check if user is authorized to view this order
+  if (!req.user.isAdmin && order.user.toString() !== req.user.id) {
+    return res.status(403).json({
+      success: false,
+      message: 'Not authorized to access this order'
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    data: order
+  });
+});
+
+// Update order status
+exports.updateOrderStatus = handleAsync(async (req, res) => {
   const { status } = req.body;
+  const order = await Order.findById(req.params.orderId);
+
+  if (!order) {
+    return res.status(404).json({
+      success: false,
+      message: 'Order not found'
+    });
+  }
+
+  // Only restaurant staff or admin can update order status
+  if (!req.user.isRestaurantStaff && !req.user.isAdmin) {
+    return res.status(403).json({
+      success: false,
+      message: 'Not authorized to update order status'
+    });
+  }
+
+  // Validate status transition
+  const validStatuses = ['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'completed', 'cancelled'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid order status'
+    });
+  }
 
   try {
-    const order = await Order.findById(id);
-    if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
-    }
-
-    order.updateStatus(status);
-    await order.save();
-    successResponse(res, order, { message: 'Order status updated successfully' });
+    await order.updateStatus(status);
+    res.status(200).json({
+      success: true,
+      data: order
+    });
   } catch (error) {
-    errorResponse(res, 'Error updating order status', error);
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Cannot update order status'
+    });
   }
-};
+});
 
-// Delete an order by ID
-const deleteOrder = async (req, res) => {
-  const { id } = req.params;
+// Cancel order
+exports.cancelOrder = handleAsync(async (req, res) => {
+  const { reason } = req.body;
+  const order = await Order.findById(req.params.orderId);
+
+  if (!order) {
+    return res.status(404).json({
+      success: false,
+      message: 'Order not found'
+    });
+  }
+
+  // Check if user is authorized to cancel this order
+  if (!req.user.isAdmin && order.user.toString() !== req.user.id) {
+    return res.status(403).json({
+      success: false,
+      message: 'Not authorized to cancel this order'
+    });
+  }
 
   try {
-    const order = await Order.findByIdAndDelete(id);
-    if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
-    }
-
-    successResponse(res, order, { message: 'Order deleted successfully' });
+    await order.cancelOrder(reason);
+    res.status(200).json({
+      success: true,
+      data: order
+    });
   } catch (error) {
-    errorResponse(res, 'Error deleting order', error);
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Cannot cancel order in current status'
+    });
   }
-};
+});
 
-// Middleware exports
-const applyPagination = paginate;
-
-module.exports = {
-  applyPagination,
-  getAllOrders,
-  getOrderById,
-  getOrdersByUser,
-  createOrder,
-  updateOrderStatus,
-  deleteOrder,
-};
