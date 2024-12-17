@@ -1,0 +1,98 @@
+E:\OneDrive - xrhub\Yaqi_code\mern-restaurant-2024
+backend/controllers
+│   ├── authController.js
+│   ├── cartController.js
+│   ├── dishController.js
+│   ├── menuController.js
+│   ├── orderController.js
+│   ├── productController.js
+│   ├── profileController.js
+│   ├── restaurantController.js
+│   └── searchController.js
+backend/data
+│   ├── abbrs.json
+│   ├── dishes.json
+│   ├── menus.json
+│   ├── products.json
+│   ├── restaurants.json
+│   ├── unused
+│   │   └── reservations.json
+│   ├── users.json
+│   └── users01.json
+backend/models
+│   ├── Cart.js
+│   ├── Dish.js
+│   ├── Menu.js
+│   ├── Order.js
+│   ├── Product.js
+│   ├── Restaurant.js
+│   └── User.js
+backend/routes
+│   ├── auth.js
+│   ├── cart.js
+│   ├── dishes.js
+│   ├── menus.js
+│   ├── orders.js
+│   ├── products.js
+│   ├── profile.js
+│   ├── restaurants.js
+│   └── search.js
+backend/middleware
+│   └── authMiddleware.js
+client/src
+│   ├── App.css
+│   ├── App.js
+│   ├── App.test.js
+│   ├── common
+│   │   ├── Footer.js
+│   │   └── Header.js
+│   ├── features
+│   │   ├── cart
+│   │   │   ├── AddToCartButton.js
+│   │   │   ├── Cart.js
+│   │   │   └── Checkout.js
+│   │   ├── dish
+│   │   │   ├── DishDetails.js
+│   │   │   └── DishList.js
+│   │   ├── order
+│   │   │   ├── OrderHistory.js
+│   │   │   └── PaymentForm.js
+│   │   ├── product
+│   │   │   ├── ProductDetails.js
+│   │   │   └── ProductList.js
+│   │   ├── restaurant
+│   │   │   ├── components
+│   │   │   ├── MenuSection.js
+│   │   │   ├── RestaurantDetails.js
+│   │   │   ├── RestaurantList.js
+│   │   │   └── styles
+│   │   └── search
+│   │   │   ├── SearchBar.js
+│   │   │   └── SearchResults.js
+│   ├── hooks
+│   │   ├── useAuth.js
+│   │   └── useProfile.js
+│   ├── index.css
+│   ├── index.js
+│   ├── logo.svg
+│   ├── pages
+│   │   ├── HomePage.js
+│   │   ├── LoginPage.js
+│   │   ├── RegisterPage.js
+│   │   ├── RestaurantPage.js
+│   │   └── UserProfile.js
+│   ├── redux
+│   │   ├── slices
+│   │   │   ├── authSlice.js
+│   │   │   ├── cartSlice.js
+│   │   │   ├── dishSlice.js
+│   │   │   ├── menuSlice.js
+│   │   │   ├── orderSlice.js
+│   │   │   ├── productSlice.js
+│   │   │   ├── restaurantSlice.js
+│   │   │   ├── searchSlice.js
+│   │   │   └── userSlice.js
+│   │   └── store.js
+│   └── utils
+│   │   ├── config.js
+│   │   └── validation.js

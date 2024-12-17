@@ -1,0 +1,122 @@
+# Dependencies
+node_modules/
+/client/node_modules/
+/backend/node_modules/
+
+# Production build
+/client/build/
+/backend/build/
+/dist/
+
+# Sensitive environment variables
+.env
+.env.local
+.env.*.local
+/client/.env
+/backend/.env
+/client/.env.development
+/client/.env.production
+/client/.env.test
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Heroku specific
+.heroku
+*.log
+npm-debug.log
+heroku-debug.log
+.env.heroku
+heroku-config.js
+test.http
+
+# IDE and Editor files
+.idea/
+.vscode/
+*.sublime-*
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Testing
+/coverage
+/client/coverage
+/backend/coverage
+
+# Misc
+.cache/
+
+# Dependency directories
+node_modules/
+
+# Miscellaneous
+*.lock
+*.bak
+*.swp
+*.tmp
+*.pid
+*.seed
+*.pid.lock
+
+# Ignore coverage results
+coverage/
+
+# Ignore backend testing files
+/backend/coverage/
+backend/junit.xml
+backend/coverage-final.json
+
+# Ignore frontend testing files
+/frontend/coverage/
+frontend/junit.xml
+frontend/coverage-final.json
+
+# Ignore AWS, Docker, and other cloud/platform files
+.aws/
+.docker/
+docker-compose.yml
+Dockerfile
+
+# GitHub Actions
+/.github/workflows/
+
+# CI/CD files
+.gitlab-ci.yml
+.circleci/
+
+# Ignore the compiled production code
+/public/js/*.map
+
+# Misc
+.sass-cache/
+.idea/
+.project/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+.terraform/
+.vagrant/
+
+# Firebase or other service-related files
+firebase-debug.log
+
+# Heroku
+/.heroku/
+
+# Backend sensitive data
+/backend/data/

@@ -1,0 +1,26 @@
+E:\OneDrive - xrhub\Yaqi_code\mern-restaurant-2024
+backend
+│   ├── .env
+│   ├── controllers
+│   ├── data
+│   ├── middleware
+│   ├── models
+│   ├── node_modules
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── routes
+│   ├── seedDatabase.js
+│   ├── server.js
+│   └── utils
+client
+│   ├── .env
+│   ├── .gitignore
+│   ├── build
+│   ├── node_modules
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── public
+│   ├── README.md
+│   ├── src
+│   └── tailwind.config.js
