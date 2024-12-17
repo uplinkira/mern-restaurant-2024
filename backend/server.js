@@ -141,7 +141,7 @@ const routeFiles = fs
   .readdirSync(path.join(__dirname, 'routes'))
   .filter((file) => file.endsWith('.js'));
 
-// API 路由先注册
+// 1. 先注册 API 路由（只注册一次）
 routeFiles.forEach((routeFile) => {
   const routePath = `./routes/${routeFile}`;
   const routeName = routeFile.replace('.js', '');
@@ -150,25 +150,16 @@ routeFiles.forEach((routeFile) => {
   app.use(apiPath, require(routePath));
 });
 
-// 然后是静态文件服务
+// 2. 生产环境处理
 if (process.env.NODE_ENV === 'production') {
   console.log('Running in production mode');
   const clientBuildPath = path.join(__dirname, '../client/build');
   console.log('Serving static files from:', clientBuildPath);
-  
-  // 先处理 API 路由
-  routeFiles.forEach((routeFile) => {
-    const routePath = `./routes/${routeFile}`;
-    const routeName = routeFile.replace('.js', '');
-    const apiPath = `/api/${routeName}`;
-    console.log(`Loading route: ${apiPath} from ${routePath}`);
-    app.use(apiPath, require(routePath));
-  });
 
-  // 然后处理静态文件
+  // 静态文件服务
   app.use(express.static(clientBuildPath));
   
-  // 最后处理所有其他请求
+  // 所有非 API 请求返回 index.html
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) {
       return next();
