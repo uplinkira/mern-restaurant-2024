@@ -91,27 +91,47 @@ if (process.env.NODE_ENV === 'development') {
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
-// MongoDB connection
+// 在 connectDB() 之前添加环境变量日志
+console.log('Starting server with environment:', {
+  NODE_ENV: process.env.NODE_ENV,
+  MONGODB_URI: process.env.MONGODB_URI ? 'Set' : 'Not set',
+  PORT: process.env.PORT,
+  FRONTEND_URL: process.env.FRONTEND_URL
+});
+
+// 修改 MongoDB 连接函数
 const connectDB = async () => {
   try {
+    console.log('Attempting to connect to MongoDB with URI:', 
+      process.env.MONGODB_URI.replace(/:[^:]*@/, ':****@')  // 隐藏密码
+    );
+    
     await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
     console.log('MongoDB connected successfully');
   } catch (error) {
-    console.error('MongoDB connection error:', error);
+    console.error('MongoDB connection error:', {
+      message: error.message,
+      code: error.code,
+      name: error.name
+    });
     process.exit(1);
   }
 };
 
+// 添加数据库事件监听
+mongoose.connection.on('connected', () => {
+  console.log('Mongoose connected to MongoDB');
+});
+
 mongoose.connection.on('error', (err) => {
-  console.error(`MongoDB connection error: ${err}`);
+  console.error('Mongoose connection error:', err);
 });
 
 mongoose.connection.on('disconnected', () => {
-  console.log('MongoDB disconnected. Retrying connection...');
-  setTimeout(connectDB, 5000);
+  console.log('Mongoose disconnected');
 });
 
 connectDB();
@@ -130,7 +150,7 @@ routeFiles.forEach((routeFile) => {
   app.use(apiPath, require(routePath));
 });
 
-// 然后是静态文件��务
+// 然后是静态文件服务
 if (process.env.NODE_ENV === 'production') {
   console.log('Running in production mode');
   const clientBuildPath = path.join(__dirname, '../client/build');
